@@ -31,6 +31,7 @@
     background-attachment: local;
     cursor: crosshair;
     overflow: hidden;
+    touch-action: none;
   }
   /* Все карточки живут внутри #world, который масштабируется через transform.
      SVG-стрелки и подписи остаются в координатах окна — анкеры берутся из BCR. */
@@ -383,11 +384,37 @@
   #settings button:hover { background: #f3f4f6; }
   #settings button.primary:hover { background: #1d4ed8; }
   #settings button.danger:hover { background: #fef2f2; }
+
+  /* ---- Mobile / touch ---- */
+  @media (max-width: 600px) {
+    #toolbar {
+      left: 8px; right: 8px; top: 8px;
+      transform: none;
+      border-radius: 12px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 4px;
+      padding: 6px 8px;
+    }
+    #toolbar .hint { display: none; }
+    #toolbar button { padding: 7px 11px; font-size: 15px; min-height: 36px; }
+  }
+  @media (pointer: coarse) {
+    .note .bar { height: 36px; flex: 0 0 36px; }
+    .note .del { width: 24px; height: 24px; font-size: 16px; }
+    .note .link { width: 24px; height: 24px; font-size: 14px; }
+    .note .tab-btn { width: 32px; height: 28px; font-size: 13px; }
+    .note { min-width: 120px; min-height: 80px; }
+    .handle.e, .handle.w { width: 24px; }
+    .handle.n, .handle.s { height: 24px; }
+    .handle.ne, .handle.nw, .handle.se, .handle.sw { width: 28px; height: 28px; }
+  }
 </style>
 </head>
 <body>
   <div id="toolbar">
     <span class="hint">ЛКМ-протяжка — карточка. «↗» — стрелка. ПКМ — двигать доску. Ctrl+ПКМ или колесо — зум. Двойной клик ПКМ — 100%.</span>
+    <button id="addNote" title="Добавить карточку">＋</button>
     <button id="zoomReset" title="Сбросить масштаб (100%)">100%</button>
     <button id="openSettings" title="API-настройки (ключ, эндпоинт, модель)">⚙</button>
     <button id="clearAll" title="Удалить все карточки">Очистить</button>
@@ -630,6 +657,81 @@
     setZoomAt(zoom * factor, e.clientX, e.clientY);
   }, { passive: false });
 
+  // ---------- touch: pan + pinch-zoom ----------
+  let touchPan = null;   // { startX, startY, lastX, lastY, moved }
+  let pinchState = null; // { dist, midX, midY }
+
+  function isEmptyBoardTarget(el) {
+    if (!el) return false;
+    if (el.closest && el.closest('.note')) return false;
+    if (el.classList && el.classList.contains('wire-label')) return false;
+    if (el.classList && el.classList.contains('wire')) return false;
+    return el === board || el === world || el === selectionEl || el === wires;
+  }
+
+  board.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      touchPan = null;
+      const t0 = e.touches[0], t1 = e.touches[1];
+      pinchState = {
+        dist: Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY),
+        midX: (t0.clientX + t1.clientX) / 2,
+        midY: (t0.clientY + t1.clientY) / 2,
+      };
+      e.preventDefault();
+      return;
+    }
+    if (e.touches.length === 1) {
+      const t = e.touches[0];
+      if (isEmptyBoardTarget(document.elementFromPoint(t.clientX, t.clientY))) {
+        e.preventDefault();
+        clearWireSelection();
+        touchPan = { startX: t.clientX, startY: t.clientY, lastX: t.clientX, lastY: t.clientY, moved: false };
+      }
+    }
+  }, { passive: false });
+
+  board.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2 && pinchState) {
+      e.preventDefault();
+      const t0 = e.touches[0], t1 = e.touches[1];
+      const newDist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+      const midX = (t0.clientX + t1.clientX) / 2;
+      const midY = (t0.clientY + t1.clientY) / 2;
+      if (pinchState.dist > 1) setZoomAt(zoom * newDist / pinchState.dist, midX, midY);
+      tx += midX - pinchState.midX;
+      ty += midY - pinchState.midY;
+      pinchState = { dist: newDist, midX, midY };
+      applyTransform();
+      return;
+    }
+    if (e.touches.length === 1 && touchPan) {
+      e.preventDefault();
+      const t = e.touches[0];
+      const dx = t.clientX - touchPan.lastX, dy = t.clientY - touchPan.lastY;
+      touchPan.lastX = t.clientX; touchPan.lastY = t.clientY;
+      if (!touchPan.moved && (Math.abs(t.clientX - touchPan.startX) > 6 || Math.abs(t.clientY - touchPan.startY) > 6)) {
+        touchPan.moved = true;
+      }
+      tx += dx; ty += dy;
+      applyTransform();
+    }
+  }, { passive: false });
+
+  board.addEventListener('touchend', (e) => {
+    if (e.touches.length < 2) pinchState = null;
+    if (e.touches.length === 0 && touchPan) {
+      if (!touchPan.moved) {
+        // Tap на пустой доске → создать карточку по центру тапа
+        const a = screenToWorld(touchPan.startX, touchPan.startY);
+        const noteW = Math.min(240, window.innerWidth * 0.72);
+        const note = createNote(a.x - noteW / 2, a.y - 60, noteW, 140);
+        note.querySelector('.pane.idea').focus();
+      }
+      touchPan = null;
+    }
+  });
+
   // ---------- note element ----------
   function createNote(x, y, w, h, html = '', id = null, z = null, title = '', algorithm = '', view = 'idea') {
     const note = document.createElement('div');
@@ -767,14 +869,45 @@
       window.addEventListener('mousemove', onMove);
       window.addEventListener('mouseup', onUp);
     });
+    bar.addEventListener('touchstart', (e) => {
+      if (e.target.classList.contains('del') || e.target.classList.contains('link')) return;
+      if (e.touches.length !== 1) return;
+      e.preventDefault();
+      e.stopPropagation();
+      bringToFront(note);
+      const t = e.touches[0];
+      const sx = t.clientX, sy = t.clientY;
+      const ox = parseFloat(note.style.left), oy = parseFloat(note.style.top);
+      const onMove = (ev) => {
+        ev.preventDefault();
+        const tt = ev.touches[0];
+        note.style.left = (ox + (tt.clientX - sx) / zoom) + 'px';
+        note.style.top  = (oy + (tt.clientY - sy) / zoom) + 'px';
+        updateWiresFor(noteId);
+      };
+      const onEnd = () => {
+        bar.removeEventListener('touchmove', onMove);
+        bar.removeEventListener('touchend', onEnd);
+        saveAll();
+      };
+      bar.addEventListener('touchmove', onMove, { passive: false });
+      bar.addEventListener('touchend', onEnd);
+    }, { passive: false });
 
     // connection drag from the ↗ port
     const linkBtn = note.querySelector('.link');
     linkBtn.addEventListener('mousedown', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      startConnectionDrag(noteId, e);
+      startConnectionDrag(noteId, e.clientX, e.clientY);
     });
+    linkBtn.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const t = e.touches[0];
+      startConnectionDrag(noteId, t.clientX, t.clientY);
+    }, { passive: false });
 
     // delete
     note.querySelector('.del').addEventListener('click', () => {
@@ -810,6 +943,37 @@
         window.addEventListener('mousemove', onMove);
         window.addEventListener('mouseup', onUp);
       });
+      h.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1) return;
+        e.preventDefault();
+        e.stopPropagation();
+        bringToFront(note);
+        const dir = [...h.classList].find(c => c !== 'handle');
+        const t = e.touches[0];
+        const sx = t.clientX, sy = t.clientY;
+        const ox = parseFloat(note.style.left), oy = parseFloat(note.style.top);
+        const ow = parseFloat(note.style.width), oh = parseFloat(note.style.height);
+        const onMove = (ev) => {
+          ev.preventDefault();
+          const tt = ev.touches[0];
+          let dx = (tt.clientX - sx) / zoom, dy = (tt.clientY - sy) / zoom;
+          let nx = ox, ny = oy, nw = ow, nh = oh;
+          if (dir.includes('e')) nw = Math.max(MIN_W, ow + dx);
+          if (dir.includes('s')) nh = Math.max(MIN_H, oh + dy);
+          if (dir.includes('w')) { nw = Math.max(MIN_W, ow - dx); nx = ox + (ow - nw); }
+          if (dir.includes('n')) { nh = Math.max(MIN_H, oh - dy); ny = oy + (oh - nh); }
+          note.style.left = nx + 'px'; note.style.top = ny + 'px';
+          note.style.width = nw + 'px'; note.style.height = nh + 'px';
+          updateWiresFor(noteId);
+        };
+        const onEnd = () => {
+          h.removeEventListener('touchmove', onMove);
+          h.removeEventListener('touchend', onEnd);
+          saveAll();
+        };
+        h.addEventListener('touchmove', onMove, { passive: false });
+        h.addEventListener('touchend', onEnd);
+      }, { passive: false });
     });
 
     // Восстановление сохранённой вкладки/алгоритма
@@ -860,7 +1024,7 @@
   }
 
   // ---------- connections (arrows) ----------
-  function startConnectionDrag(fromId, e) {
+  function startConnectionDrag(fromId, startX, startY) {
     const fromEl = notes.get(fromId).el;
     const ghost = document.createElementNS(SVG_NS, 'path');
     ghost.setAttribute('class', 'wire ghost');
@@ -870,39 +1034,42 @@
     ghost.setAttribute('marker-end', 'url(#arrow-head)');
     wires.appendChild(ghost);
 
-    const onMove = (ev) => {
-      // highlight hovered note (if any)
-      const hovered = noteAtPoint(ev.clientX, ev.clientY, fromId);
+    function move(x, y) {
+      const hovered = noteAtPoint(x, y, fromId);
       document.querySelectorAll('.note.link-target').forEach(n => n.classList.remove('link-target'));
       if (hovered) hovered.classList.add('link-target');
-
-      const start = anchorPoint(fromEl, ev.clientX, ev.clientY);
-      const end = { x: ev.clientX, y: ev.clientY };
-      ghost.setAttribute('d', curvePath(start, end));
-    };
-    const onUp = (ev) => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
+      ghost.setAttribute('d', curvePath(anchorPoint(fromEl, x, y), { x, y }));
+    }
+    function finish(x, y) {
       ghost.remove();
-      const target = noteAtPoint(ev.clientX, ev.clientY, fromId);
+      const target = noteAtPoint(x, y, fromId);
       document.querySelectorAll('.note.link-target').forEach(n => n.classList.remove('link-target'));
       if (target) {
         const toId = target.dataset.id;
         if (toId !== fromId) {
-          // avoid exact duplicate
           const exists = [...connections.values()].some(c => c.from === fromId && c.to === toId);
-          if (!exists) {
-            createConnection(fromId, toId, '');
-            updateAllWires();
-            saveAll();
-          }
+          if (!exists) { createConnection(fromId, toId, ''); updateAllWires(); saveAll(); }
         }
       }
+    }
+    const onMouseMove = (ev) => move(ev.clientX, ev.clientY);
+    const onMouseUp = (ev) => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      finish(ev.clientX, ev.clientY);
     };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    // seed initial position
-    onMove(e);
+    const onTouchMove = (ev) => { ev.preventDefault(); const t = ev.touches[0]; move(t.clientX, t.clientY); };
+    const onTouchEnd = (ev) => {
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+      const t = ev.changedTouches[0];
+      finish(t.clientX, t.clientY);
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd);
+    move(startX, startY);
   }
 
   function noteAtPoint(x, y, excludeId) {
@@ -1122,6 +1289,12 @@
   });
 
   document.getElementById('zoomReset').addEventListener('click', resetZoom);
+  document.getElementById('addNote').addEventListener('click', () => {
+    const a = screenToWorld(window.innerWidth / 2, window.innerHeight / 2);
+    const noteW = Math.min(240, window.innerWidth * 0.72);
+    const note = createNote(a.x - noteW / 2, a.y - 60, noteW, 140);
+    note.querySelector('.pane.idea').focus();
+  });
 
   // ---------- Anthropic API ----------
   const KEY_STORAGE   = 'aiboard.anthropicKey';
