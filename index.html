@@ -1,0 +1,1263 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<title>Идейная доска</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  :root {
+    --note-bg: #fffef7;
+    --note-border: #2a2a2a;
+    --note-shadow: 0 2px 8px rgba(0,0,0,.08), 0 8px 24px rgba(0,0,0,.06);
+    --accent: #2563eb;
+    --arrow: #374151;
+    --arrow-hover: #2563eb;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #111;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  #board {
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(circle at 1px 1px, #e5e7eb 1px, transparent 0) 0 0 / 24px 24px,
+      #ffffff;
+    background-attachment: local;
+    cursor: crosshair;
+    overflow: hidden;
+  }
+  /* Все карточки живут внутри #world, который масштабируется через transform.
+     SVG-стрелки и подписи остаются в координатах окна — анкеры берутся из BCR. */
+  #world {
+    position: absolute;
+    left: 0; top: 0;
+    width: 0; height: 0;
+    transform-origin: 0 0;
+    will-change: transform;
+  }
+
+  /* SVG layer for arrows — sits between board bg and notes */
+  #wires {
+    position: fixed; inset: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 1;
+  }
+  #wires .wire { pointer-events: stroke; cursor: pointer; }
+  #wires .wire:hover { stroke: var(--arrow-hover); }
+  #wires .wire.selected { stroke: var(--arrow-hover); }
+  #wires .ghost { pointer-events: none; stroke-dasharray: 6 5; opacity: .8; }
+
+  /* Floating label over wire */
+  .wire-label {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    background: #fff;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 13px;
+    line-height: 1.4;
+    color: #111;
+    box-shadow: 0 2px 6px rgba(0,0,0,.08);
+    max-width: 260px;
+    min-width: 14px;
+    min-height: 20px;
+    z-index: 50;
+    cursor: text;
+    outline: none;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    text-align: center;
+  }
+  .wire-label:empty::before {
+    content: "+";
+    color: #9ca3af;
+  }
+  .wire-label.placeholder-hidden:empty::before { content: ""; }
+  .wire-label:hover { border-color: var(--accent); }
+  .wire-label:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,.15); }
+
+  /* selection rectangle being drawn */
+  #selection {
+    position: absolute;
+    border: 1.5px dashed var(--accent);
+    background: rgba(37, 99, 235, .06);
+    pointer-events: none;
+    display: none;
+  }
+
+  .note {
+    position: absolute;
+    min-width: 80px;
+    min-height: 48px;
+    background: var(--note-bg);
+    border: 1.5px solid var(--note-border);
+    border-radius: 10px;
+    box-shadow: var(--note-shadow);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: box-shadow .15s ease;
+    z-index: 10;
+  }
+  .note:hover { box-shadow: 0 4px 14px rgba(0,0,0,.12), 0 12px 32px rgba(0,0,0,.08); }
+  .note.focused {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, .15), var(--note-shadow);
+  }
+  .note.link-target {
+    border-color: #10b981 !important;
+    box-shadow: 0 0 0 3px rgba(16,185,129,.25), var(--note-shadow);
+  }
+
+  .note .bar {
+    height: 26px;
+    flex: 0 0 26px;
+    background: linear-gradient(180deg, #f3f4f6, #e5e7eb);
+    border-bottom: 1px solid #d1d5db;
+    cursor: grab;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 6px;
+    user-select: none;
+    gap: 6px;
+  }
+  .note .title {
+    /* Узкий хитбокс: занимает только своё содержимое, оставляя бар свободным для drag */
+    flex: 0 1 auto;
+    min-width: 70px;
+    max-width: 50%;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.2;
+    color: #1f2937;
+    padding: 2px 6px;
+    border-radius: 4px;
+    outline: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: text;
+    user-select: text;
+  }
+  .note .title:hover { background: rgba(255,255,255,.6); }
+  .note .title:focus {
+    background: #fff;
+    box-shadow: 0 0 0 1.5px var(--accent);
+    text-overflow: clip;
+  }
+  .note .title:empty::before {
+    content: "Подпись";
+    color: #9ca3af;
+    font-weight: 500;
+  }
+  .note .title:focus:empty::before { content: ""; }
+  .note .bar:active { cursor: grabbing; }
+  .note .dots { display: flex; gap: 4px; }
+  .note .dots span {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #cbd5e1;
+  }
+  .note .bar-right { display: flex; align-items: center; gap: 4px; }
+  .note .link {
+    width: 16px; height: 16px;
+    display: grid; place-items: center;
+    border-radius: 4px;
+    cursor: crosshair;
+    color: #374151;
+    background: #fff;
+    border: 1px solid #9ca3af;
+    font-size: 11px;
+    line-height: 1;
+    user-select: none;
+  }
+  .note .link:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .note .del {
+    font-size: 13px;
+    line-height: 1;
+    width: 16px; height: 16px;
+    display: grid; place-items: center;
+    border-radius: 3px;
+    cursor: pointer;
+    color: #6b7280;
+  }
+  .note .del:hover { background: #fecaca; color: #991b1b; }
+
+  /* Контейнер вкладок и сами панели */
+  .note .panes { flex: 1; display: flex; min-height: 0; }
+  .note .pane {
+    flex: 1;
+    padding: 10px 12px;
+    outline: none;
+    font-size: 15px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    overflow-y: auto;
+    user-select: text;
+    cursor: text;
+    color: #111;
+  }
+  .note .pane[hidden] { display: none; }
+  .note .pane.idea:empty::before {
+    content: "Запишите идею…";
+    color: #9ca3af; pointer-events: none;
+  }
+  .note .pane.algorithm {
+    font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+    font-size: 13.5px;
+    line-height: 1.55;
+  }
+  .note .pane.algorithm:empty::before {
+    content: "Нажмите ▶ — сгенерируется алгоритм";
+    color: #9ca3af; pointer-events: none;
+  }
+
+  /* Нижняя полоска вкладок-кнопок */
+  .note .tabs {
+    flex: 0 0 auto;
+    display: flex;
+    gap: 4px;
+    padding: 4px 6px;
+    background: #f9fafb;
+    border-top: 1px solid #e5e7eb;
+    border-bottom-left-radius: 9px;
+    border-bottom-right-radius: 9px;
+    user-select: none;
+  }
+  .note .tab-btn {
+    width: 24px; height: 22px;
+    display: grid; place-items: center;
+    border: 1px solid #d1d5db;
+    background: #ffffff;
+    color: #374151;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 11px; line-height: 1;
+    padding: 0;
+    transition: background .12s ease, color .12s ease, border-color .12s ease;
+  }
+  .note .tab-btn:hover { background: #f3f4f6; }
+  .note .tab-btn.active {
+    background: #f97316;
+    color: #ffffff;
+    border-color: #ea580c;
+    box-shadow: 0 0 0 2px rgba(249,115,22,.22);
+  }
+  .note .tab-btn[disabled] { cursor: progress; opacity: .85; }
+  .note .tab-btn.loading .icon { display: none; }
+  .note .tab-btn .spinner {
+    display: none;
+    width: 12px; height: 12px;
+    border: 2px solid #d1d5db;
+    border-top-color: #6b7280;
+    border-radius: 50%;
+    animation: aiboard-spin .8s linear infinite;
+  }
+  .note .tab-btn.loading .spinner { display: inline-block; }
+  @keyframes aiboard-spin { to { transform: rotate(360deg); } }
+
+  /* resize handles — широкая невидимая область, удобно хватать */
+  .handle { position: absolute; background: transparent; z-index: 5; }
+  .handle.e  { right: -8px;  top: 8px; bottom: 8px; width: 16px; cursor: ew-resize; }
+  .handle.w  { left:  -8px;  top: 8px; bottom: 8px; width: 16px; cursor: ew-resize; }
+  .handle.n  { top:   -8px;  left: 8px; right: 8px; height: 16px; cursor: ns-resize; }
+  .handle.s  { bottom: -8px; left: 8px; right: 8px; height: 16px; cursor: ns-resize; }
+  .handle.ne { top: -10px;    right: -10px; width: 20px; height: 20px; cursor: nesw-resize; }
+  .handle.nw { top: -10px;    left:  -10px; width: 20px; height: 20px; cursor: nwse-resize; }
+  .handle.se { bottom: -10px; right: -10px; width: 20px; height: 20px; cursor: nwse-resize; }
+  .handle.sw { bottom: -10px; left:  -10px; width: 20px; height: 20px; cursor: nesw-resize; }
+  /* Карточке выключаем overflow, чтобы хэндлы выступали наружу.
+     Скругление переносим на bar (верх) и text (низ). */
+  .note { overflow: visible; }
+  .note .bar  { border-top-left-radius: 9px; border-top-right-radius: 9px; }
+  /* Нижние скругления теперь живут на .tabs (см. выше). */
+
+  /* toolbar */
+  #toolbar {
+    position: fixed;
+    top: 12px; left: 50%;
+    transform: translateX(-50%);
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 999px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.08);
+    padding: 6px 10px;
+    display: flex; align-items: center; gap: 6px;
+    font-size: 13px;
+    z-index: 1000;
+  }
+  #toolbar .hint { color: #6b7280; padding: 0 8px; }
+  #toolbar button {
+    border: 0; background: #f3f4f6;
+    padding: 6px 12px; border-radius: 999px;
+    cursor: pointer; font-size: 13px;
+  }
+  #toolbar button:hover { background: #e5e7eb; }
+
+  /* text-formatting popover */
+  #fmt {
+    position: fixed;
+    display: none;
+    background: #111827;
+    color: #fff;
+    border-radius: 8px;
+    padding: 4px;
+    gap: 2px;
+    z-index: 2000;
+    box-shadow: 0 6px 20px rgba(0,0,0,.25);
+  }
+  #fmt.show { display: flex; }
+  #fmt button {
+    background: transparent; color: #fff; border: 0;
+    width: 28px; height: 28px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  #fmt button:hover { background: rgba(255,255,255,.15); }
+  #fmt .sep { width: 1px; background: rgba(255,255,255,.2); margin: 4px 2px; }
+
+  /* Окно настроек API */
+  #settings-overlay {
+    position: fixed; inset: 0;
+    background: rgba(17,24,39,.45);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 3000;
+  }
+  #settings-overlay.show { display: flex; }
+  #settings {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 20px 50px rgba(0,0,0,.25);
+    width: min(460px, 92vw);
+    padding: 18px 18px 14px;
+    font-size: 13px;
+  }
+  #settings h3 { margin: 0 0 12px; font-size: 15px; }
+  #settings label {
+    display: block;
+    font-weight: 600;
+    color: #374151;
+    margin: 10px 0 4px;
+  }
+  #settings input {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    outline: none;
+  }
+  #settings input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,.15); }
+  #settings .hint { color: #6b7280; font-size: 12px; margin-top: 4px; }
+  #settings .row {
+    display: flex; justify-content: flex-end; gap: 8px;
+    margin-top: 14px;
+  }
+  #settings button {
+    padding: 7px 14px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  #settings button.primary {
+    background: var(--accent); color: #fff; border-color: var(--accent);
+  }
+  #settings button.danger { color: #b91c1c; border-color: #fecaca; }
+  #settings button:hover { background: #f3f4f6; }
+  #settings button.primary:hover { background: #1d4ed8; }
+  #settings button.danger:hover { background: #fef2f2; }
+</style>
+</head>
+<body>
+  <div id="toolbar">
+    <span class="hint">ЛКМ-протяжка — карточка. «↗» — стрелка. ПКМ — двигать доску. Ctrl+ПКМ или колесо — зум. Двойной клик ПКМ — 100%.</span>
+    <button id="zoomReset" title="Сбросить масштаб (100%)">100%</button>
+    <button id="openSettings" title="API-настройки (ключ, эндпоинт, модель)">⚙</button>
+    <button id="clearAll" title="Удалить все карточки">Очистить</button>
+  </div>
+
+  <div id="board">
+    <svg id="wires" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrow-head" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--arrow)"/>
+        </marker>
+        <marker id="arrow-head-hover" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--arrow-hover)"/>
+        </marker>
+      </defs>
+    </svg>
+    <div id="world"></div>
+    <div id="selection"></div>
+  </div>
+
+  <div id="settings-overlay">
+    <div id="settings" role="dialog" aria-label="Настройки API">
+      <h3>Настройки Claude API</h3>
+      <label for="set-url">Endpoint (база или полный URL)</label>
+      <input id="set-url" type="text" spellcheck="false" placeholder="http://localhost:8787" />
+      <div class="hint">
+        Anthropic-совместимый эндпоинт. Если провайдер не отдаёт CORS-заголовки браузеру
+        (как Zenoid), запустите локальный прокси <code>start-proxy.bat</code> и укажите тут
+        <code>http://localhost:8787</code>. Без прокси — <code>https://api.anthropic.com</code>.
+      </div>
+      <label for="set-key">API-ключ</label>
+      <input id="set-key" type="password" spellcheck="false" placeholder="sk-ant-… или sk-zen-…" />
+      <div class="hint">Любой ключ, который понимает выбранный эндпоинт (sk-ant-, sk-zen-, и т.п.).</div>
+      <label for="set-model">Модель</label>
+      <input id="set-model" type="text" spellcheck="false" placeholder="claude-sonnet-4-5" />
+      <div class="hint">Имя модели в API. Должно быть поддержано выбранным эндпоинтом.</div>
+      <div class="row">
+        <button id="set-clear" class="danger" type="button">Очистить ключ</button>
+        <button id="set-cancel" type="button">Отмена</button>
+        <button id="set-save" class="primary" type="button">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="fmt" role="toolbar" aria-label="Форматирование">
+    <button data-cmd="bold" title="Жирный (Ctrl+B)"><b>B</b></button>
+    <button data-cmd="italic" title="Курсив (Ctrl+I)"><i>I</i></button>
+    <button data-cmd="underline" title="Подчёркивание (Ctrl+U)"><u>U</u></button>
+    <button data-cmd="strikeThrough" title="Зачёркнутый"><s>S</s></button>
+    <div class="sep"></div>
+    <button data-cmd="insertUnorderedList" title="Список">•≡</button>
+    <button data-cmd="formatBlock" data-arg="H3" title="Заголовок">H</button>
+    <button data-cmd="removeFormat" title="Сбросить">⟲</button>
+  </div>
+
+<script>
+(() => {
+  const board = document.getElementById('board');
+  const world = document.getElementById('world');
+  const selectionEl = document.getElementById('selection');
+  const fmt = document.getElementById('fmt');
+  const wires = document.getElementById('wires');
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+
+  // ---------- zoom / pan ----------
+  let zoom = 1, tx = 0, ty = 0;
+  const ZOOM_MIN = 0.15, ZOOM_MAX = 4;
+  function applyTransform() {
+    world.style.transform = `translate(${tx}px, ${ty}px) scale(${zoom})`;
+    updateAllWires();
+  }
+  function screenToWorld(sx, sy) {
+    return { x: (sx - tx) / zoom, y: (sy - ty) / zoom };
+  }
+  function setZoomAt(newZoom, ax, ay) {
+    newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newZoom));
+    if (newZoom === zoom) return;
+    const wp = screenToWorld(ax, ay);
+    zoom = newZoom;
+    tx = ax - wp.x * zoom;
+    ty = ay - wp.y * zoom;
+    applyTransform();
+  }
+  function resetZoom() {
+    zoom = 1; tx = 0; ty = 0; applyTransform();
+  }
+
+  const STORAGE_KEY = 'aiboard.notes.v2';
+  const MIN_W = 80, MIN_H = 48;
+
+  // data
+  const notes = new Map();        // id -> { el }
+  const connections = new Map();  // id -> { from, to, label, pathEl, labelEl }
+  let zTop = 10;
+  let connSeq = 0, noteSeq = 0;
+
+  function uid(prefix) {
+    return prefix + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
+  }
+
+  // ---------- persistence ----------
+  function saveAll() {
+    const out = {
+      notes: [...notes.entries()].map(([id, n]) => ({
+        id,
+        x: parseFloat(n.el.style.left),
+        y: parseFloat(n.el.style.top),
+        w: parseFloat(n.el.style.width),
+        h: parseFloat(n.el.style.height),
+        z: parseFloat(n.el.style.zIndex || 10),
+        html: n.el.querySelector('.pane.idea').innerHTML,
+        title: n.el.querySelector('.title').textContent || '',
+        algorithm: n.el.querySelector('.pane.algorithm').innerHTML,
+        view: n.el.dataset.view || 'idea',
+      })),
+      connections: [...connections.entries()].map(([id, c]) => ({
+        id, from: c.from, to: c.to, label: c.label || '',
+      })),
+    };
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(out)); } catch (_) {}
+  }
+  function loadAll() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      (data.notes || []).forEach(d => createNote(
+        d.x, d.y, d.w, d.h, d.html, d.id, d.z,
+        d.title || '', d.algorithm || '', d.view || 'idea'
+      ));
+      (data.connections || []).forEach(c => {
+        if (notes.has(c.from) && notes.has(c.to)) {
+          createConnection(c.from, c.to, c.label, c.id);
+        }
+      });
+      updateAllWires();
+    } catch (_) {}
+  }
+
+  // ---------- creation by drag (LMB) ----------
+  let dragStart = null;
+  board.addEventListener('mousedown', (e) => {
+    if (e.target !== board && e.target !== world && e.target.tagName !== 'svg' && e.target !== selectionEl) return;
+    if (e.button !== 0) return;
+    dragStart = { x: e.clientX, y: e.clientY };
+    selectionEl.style.display = 'block';
+    Object.assign(selectionEl.style, {
+      left: e.clientX + 'px', top: e.clientY + 'px',
+      width: '0px', height: '0px',
+    });
+    clearWireSelection();
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!dragStart) return;
+    const x = Math.min(dragStart.x, e.clientX);
+    const y = Math.min(dragStart.y, e.clientY);
+    const w = Math.abs(e.clientX - dragStart.x);
+    const h = Math.abs(e.clientY - dragStart.y);
+    Object.assign(selectionEl.style, {
+      left: x + 'px', top: y + 'px',
+      width: w + 'px', height: h + 'px',
+    });
+  });
+  window.addEventListener('mouseup', (e) => {
+    if (!dragStart) return;
+    const sx = Math.min(dragStart.x, e.clientX);
+    const sy = Math.min(dragStart.y, e.clientY);
+    const sw = Math.abs(e.clientX - dragStart.x);
+    const sh = Math.abs(e.clientY - dragStart.y);
+    selectionEl.style.display = 'none';
+    dragStart = null;
+    if (sw < 20 || sh < 20) return;
+    // Конвертируем экранные координаты в координаты world
+    const a = screenToWorld(sx, sy);
+    const b = screenToWorld(sx + sw, sy + sh);
+    const wW = b.x - a.x, wH = b.y - a.y;
+    const note = createNote(a.x, a.y, Math.max(wW, MIN_W), Math.max(wH, MIN_H));
+    note.querySelector('.pane.idea').focus();
+  });
+
+  // ---------- RMB drag: зум (вниз — отдаляет, вверх — приближает) ----------
+  let rmbState = null;
+  let lastRmbClickT = 0;
+  board.addEventListener('contextmenu', (e) => e.preventDefault());
+  board.addEventListener('mousedown', (e) => {
+    if (e.button !== 2) return;
+    e.preventDefault();
+    rmbState = {
+      anchorX: e.clientX, anchorY: e.clientY,
+      lastX: e.clientX, lastY: e.clientY,
+      moved: false, target: e.target,
+    };
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!rmbState) return;
+    const dx = e.clientX - rmbState.lastX;
+    const dy = e.clientY - rmbState.lastY;
+    if (dx === 0 && dy === 0) return;
+    rmbState.lastX = e.clientX;
+    rmbState.lastY = e.clientY;
+    rmbState.moved = true;
+    if (e.ctrlKey || e.metaKey) {
+      // Ctrl + ПКМ — зум: вверх приближает, вниз отдаляет (вокруг точки клика)
+      if (dy !== 0) {
+        const factor = Math.exp(-dy * 0.006);
+        setZoomAt(zoom * factor, rmbState.anchorX, rmbState.anchorY);
+      }
+    } else {
+      // ПКМ без Ctrl — обычное панорамирование во все стороны
+      tx += dx;
+      ty += dy;
+      applyTransform();
+    }
+  });
+  window.addEventListener('mouseup', (e) => {
+    if (e.button !== 2 || !rmbState) return;
+    const state = rmbState; rmbState = null;
+    if (!state.moved) {
+      // двойной клик ПКМ по пустому фону → сброс зума
+      const isEmpty = state.target === board || state.target === world || state.target.tagName === 'svg';
+      if (isEmpty) {
+        const now = Date.now();
+        if (now - lastRmbClickT < 400) { resetZoom(); lastRmbClickT = 0; }
+        else lastRmbClickT = now;
+      }
+    }
+  });
+  // Колесо: зум вокруг курсора. Если курсор над редактируемым текстом со скроллом — не зумим.
+  board.addEventListener('wheel', (e) => {
+    const t = e.target;
+    if (t && t.closest) {
+      const editable = t.closest('[contenteditable="true"]');
+      if (editable && editable.scrollHeight > editable.clientHeight) return; // даём скроллить текст
+    }
+    e.preventDefault();
+    const factor = Math.exp(-e.deltaY * 0.0015);
+    setZoomAt(zoom * factor, e.clientX, e.clientY);
+  }, { passive: false });
+
+  // ---------- note element ----------
+  function createNote(x, y, w, h, html = '', id = null, z = null, title = '', algorithm = '', view = 'idea') {
+    const note = document.createElement('div');
+    const noteId = id || uid('n');
+    note.className = 'note';
+    note.dataset.id = noteId;
+    note.style.left = x + 'px';
+    note.style.top = y + 'px';
+    note.style.width = w + 'px';
+    note.style.height = h + 'px';
+    if (z) { note.style.zIndex = z; zTop = Math.max(zTop, z); }
+
+    note.dataset.view = 'idea';
+    note.innerHTML = `
+      <div class="bar">
+        <div class="dots"><span></span><span></span><span></span></div>
+        <div class="title" contenteditable="true" spellcheck="true" title="Подписать идею"></div>
+        <div class="bar-right">
+          <div class="link" title="Создать стрелку: тяните на другую карточку">↗</div>
+          <div class="del" title="Удалить">×</div>
+        </div>
+      </div>
+      <div class="panes">
+        <div class="pane idea" contenteditable="true" spellcheck="true"></div>
+        <div class="pane algorithm" contenteditable="true" spellcheck="true" hidden></div>
+      </div>
+      <div class="tabs">
+        <button class="tab-btn algo" type="button" title="Преобразовать идею в алгоритм" aria-label="Алгоритм">
+          <span class="icon">▶</span><span class="spinner"></span>
+        </button>
+      </div>
+      <div class="handle n"></div><div class="handle s"></div>
+      <div class="handle e"></div><div class="handle w"></div>
+      <div class="handle ne"></div><div class="handle nw"></div>
+      <div class="handle se"></div><div class="handle sw"></div>
+    `;
+    world.appendChild(note);
+    notes.set(noteId, { el: note });
+
+    const paneIdea = note.querySelector('.pane.idea');
+    const paneAlgo = note.querySelector('.pane.algorithm');
+    const btnAlgo  = note.querySelector('.tab-btn.algo');
+    if (html) paneIdea.innerHTML = html;
+    const titleEl = note.querySelector('.title');
+    if (title) titleEl.textContent = title;
+
+    // Подпись идеи — простой однострочный (Shift+Enter — перенос, Enter — закрепить)
+    titleEl.addEventListener('input', () => saveAll());
+    titleEl.addEventListener('focus', () => bringToFront(note));
+    titleEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); titleEl.blur(); }
+      if (e.key === 'Escape') { e.preventDefault(); titleEl.blur(); }
+    });
+    titleEl.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const t = (e.clipboardData || window.clipboardData).getData('text/plain').replace(/\s+/g, ' ').trim();
+      document.execCommand('insertText', false, t);
+    });
+    // Чтобы клик по подписи не уводил в drag карточки
+    titleEl.addEventListener('mousedown', (e) => e.stopPropagation());
+
+    // Универсальные обработчики на обе панели
+    [paneIdea, paneAlgo].forEach(pane => {
+      pane.addEventListener('focus', () => {
+        document.querySelectorAll('.note.focused').forEach(n => n.classList.remove('focused'));
+        note.classList.add('focused');
+        bringToFront(note);
+      });
+      pane.addEventListener('input', () => {
+        autoGrowIfNeeded(note);
+        updateWiresFor(noteId);
+        saveAll();
+      });
+      pane.addEventListener('blur', () => {
+        setTimeout(() => { if (!fmt.matches(':hover')) hideFmt(); }, 80);
+      });
+    });
+
+    // ---- Переключение вкладок ----
+    function setView(name) {
+      note.dataset.view = name;
+      paneIdea.hidden = (name !== 'idea');
+      paneAlgo.hidden = (name !== 'algorithm');
+      btnAlgo.classList.toggle('active', name === 'algorithm');
+      // фокус на видимой панели, но без перетаскивания скролла
+      const target = name === 'algorithm' ? paneAlgo : paneIdea;
+      // только если уже был фокус внутри карточки
+      if (note.contains(document.activeElement)) target.focus();
+      updateWiresFor(noteId);
+    }
+    btnAlgo.addEventListener('mousedown', (e) => e.stopPropagation());
+    btnAlgo.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      // На «Алгоритм» уже — возвращаемся на «Идея»
+      if (note.dataset.view === 'algorithm') { setView('idea'); saveAll(); return; }
+      // Кэш есть — просто переключаемся, без сети
+      if (paneAlgo.textContent.trim().length > 0) { setView('algorithm'); saveAll(); return; }
+      // Нужно сгенерировать
+      const idea = paneIdea.innerText.trim();
+      if (!idea) { alert('Сначала запишите идею в этой карточке.'); return; }
+      btnAlgo.classList.add('loading');
+      btnAlgo.disabled = true;
+      try {
+        const algo = await generateAlgorithm(idea);
+        paneAlgo.textContent = algo;
+        setView('algorithm');
+        saveAll();
+      } catch (err) {
+        alert('Не удалось получить алгоритм: ' + (err && err.message ? err.message : err));
+      } finally {
+        btnAlgo.classList.remove('loading');
+        btnAlgo.disabled = false;
+      }
+    });
+
+    // drag move from header
+    const bar = note.querySelector('.bar');
+    bar.addEventListener('mousedown', (e) => {
+      if (e.target.classList.contains('del')) return;
+      if (e.target.classList.contains('link')) return; // handled separately
+      e.preventDefault();
+      bringToFront(note);
+      const sx = e.clientX, sy = e.clientY;
+      const ox = parseFloat(note.style.left), oy = parseFloat(note.style.top);
+      const onMove = (ev) => {
+        note.style.left = (ox + (ev.clientX - sx) / zoom) + 'px';
+        note.style.top  = (oy + (ev.clientY - sy) / zoom) + 'px';
+        updateWiresFor(noteId);
+      };
+      const onUp = () => {
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+        saveAll();
+      };
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    });
+
+    // connection drag from the ↗ port
+    const linkBtn = note.querySelector('.link');
+    linkBtn.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      startConnectionDrag(noteId, e);
+    });
+
+    // delete
+    note.querySelector('.del').addEventListener('click', () => {
+      removeNote(noteId);
+    });
+
+    // resize
+    note.querySelectorAll('.handle').forEach(h => {
+      h.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        bringToFront(note);
+        const dir = [...h.classList].find(c => c !== 'handle');
+        const sx = e.clientX, sy = e.clientY;
+        const ox = parseFloat(note.style.left), oy = parseFloat(note.style.top);
+        const ow = parseFloat(note.style.width), oh = parseFloat(note.style.height);
+        const onMove = (ev) => {
+          let dx = (ev.clientX - sx) / zoom, dy = (ev.clientY - sy) / zoom;
+          let nx = ox, ny = oy, nw = ow, nh = oh;
+          if (dir.includes('e')) nw = Math.max(MIN_W, ow + dx);
+          if (dir.includes('s')) nh = Math.max(MIN_H, oh + dy);
+          if (dir.includes('w')) { nw = Math.max(MIN_W, ow - dx); nx = ox + (ow - nw); }
+          if (dir.includes('n')) { nh = Math.max(MIN_H, oh - dy); ny = oy + (oh - nh); }
+          note.style.left = nx + 'px'; note.style.top = ny + 'px';
+          note.style.width = nw + 'px'; note.style.height = nh + 'px';
+          updateWiresFor(noteId);
+        };
+        const onUp = () => {
+          window.removeEventListener('mousemove', onMove);
+          window.removeEventListener('mouseup', onUp);
+          saveAll();
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+      });
+    });
+
+    // Восстановление сохранённой вкладки/алгоритма
+    if (algorithm) paneAlgo.innerHTML = algorithm;
+    if (view === 'algorithm' && paneAlgo.textContent.trim().length > 0) {
+      paneIdea.hidden = true;
+      paneAlgo.hidden = false;
+      note.dataset.view = 'algorithm';
+      btnAlgo.classList.add('active');
+    }
+
+    bringToFront(note);
+    saveAll();
+    return note;
+  }
+
+  function removeNote(noteId) {
+    const rec = notes.get(noteId);
+    if (!rec) return;
+    rec.el.remove();
+    notes.delete(noteId);
+    // remove attached connections
+    [...connections.entries()].forEach(([cid, c]) => {
+      if (c.from === noteId || c.to === noteId) removeConnection(cid);
+    });
+    saveAll();
+  }
+
+  // Порог авто-роста карточки: дальше — появляется внутренний скролл текста.
+  function maxNoteHeight() {
+    return Math.min(640, Math.max(220, window.innerHeight * 0.8 / Math.max(zoom, 0.0001)));
+  }
+  function autoGrowIfNeeded(note) {
+    const t = note.querySelector('.pane:not([hidden])');
+    if (!t) return;
+    if (t.scrollHeight > t.clientHeight) {
+      const cap = maxNoteHeight();
+      const curH = parseFloat(note.style.height);
+      if (curH >= cap) return; // достигли порога — пусть pane скроллится
+      const extra = t.scrollHeight - t.clientHeight;
+      const newH = Math.min(cap, curH + extra + 2);
+      if (newH > curH) note.style.height = newH + 'px';
+    }
+  }
+
+  function bringToFront(note) {
+    note.style.zIndex = ++zTop;
+  }
+
+  // ---------- connections (arrows) ----------
+  function startConnectionDrag(fromId, e) {
+    const fromEl = notes.get(fromId).el;
+    const ghost = document.createElementNS(SVG_NS, 'path');
+    ghost.setAttribute('class', 'wire ghost');
+    ghost.setAttribute('fill', 'none');
+    ghost.setAttribute('stroke', 'var(--arrow)');
+    ghost.setAttribute('stroke-width', '2');
+    ghost.setAttribute('marker-end', 'url(#arrow-head)');
+    wires.appendChild(ghost);
+
+    const onMove = (ev) => {
+      // highlight hovered note (if any)
+      const hovered = noteAtPoint(ev.clientX, ev.clientY, fromId);
+      document.querySelectorAll('.note.link-target').forEach(n => n.classList.remove('link-target'));
+      if (hovered) hovered.classList.add('link-target');
+
+      const start = anchorPoint(fromEl, ev.clientX, ev.clientY);
+      const end = { x: ev.clientX, y: ev.clientY };
+      ghost.setAttribute('d', curvePath(start, end));
+    };
+    const onUp = (ev) => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      ghost.remove();
+      const target = noteAtPoint(ev.clientX, ev.clientY, fromId);
+      document.querySelectorAll('.note.link-target').forEach(n => n.classList.remove('link-target'));
+      if (target) {
+        const toId = target.dataset.id;
+        if (toId !== fromId) {
+          // avoid exact duplicate
+          const exists = [...connections.values()].some(c => c.from === fromId && c.to === toId);
+          if (!exists) {
+            createConnection(fromId, toId, '');
+            updateAllWires();
+            saveAll();
+          }
+        }
+      }
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    // seed initial position
+    onMove(e);
+  }
+
+  function noteAtPoint(x, y, excludeId) {
+    // hit-test all notes (topmost wins)
+    const arr = [...notes.values()].sort((a, b) =>
+      parseFloat(b.el.style.zIndex || 0) - parseFloat(a.el.style.zIndex || 0));
+    for (const { el } of arr) {
+      if (el.dataset.id === excludeId) continue;
+      const r = el.getBoundingClientRect();
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return el;
+    }
+    return null;
+  }
+
+  // Pick a point on the border of `el` closest to (tx, ty) — gives clean docking like Blender nodes.
+  function anchorPoint(el, tx, ty) {
+    const r = el.getBoundingClientRect();
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    const dx = tx - cx, dy = ty - cy;
+    if (dx === 0 && dy === 0) return { x: r.right, y: cy };
+    const hw = r.width / 2, hh = r.height / 2;
+    const sx = Math.abs(dx) / hw, sy = Math.abs(dy) / hh;
+    const s = Math.max(sx, sy);
+    return { x: cx + dx / s, y: cy + dy / s };
+  }
+
+  function curvePath(a, b) {
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const dist = Math.hypot(dx, dy);
+    // horizontal-ish curvature for a node-graph feel
+    const offset = Math.min(140, Math.max(40, dist * 0.4));
+    // If start/end are mostly horizontal, bend horizontally; otherwise vertically.
+    const horiz = Math.abs(dx) >= Math.abs(dy);
+    const c1 = horiz
+      ? { x: a.x + Math.sign(dx || 1) * offset, y: a.y }
+      : { x: a.x, y: a.y + Math.sign(dy || 1) * offset };
+    const c2 = horiz
+      ? { x: b.x - Math.sign(dx || 1) * offset, y: b.y }
+      : { x: b.x, y: b.y - Math.sign(dy || 1) * offset };
+    return `M ${a.x} ${a.y} C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${b.x} ${b.y}`;
+  }
+
+  function createConnection(fromId, toId, label = '', id = null) {
+    const connId = id || uid('c');
+    const path = document.createElementNS(SVG_NS, 'path');
+    path.setAttribute('class', 'wire');
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', 'var(--arrow)');
+    path.setAttribute('stroke-width', '2');
+    path.setAttribute('marker-end', 'url(#arrow-head)');
+    path.dataset.id = connId;
+    wires.appendChild(path);
+
+    const labelEl = document.createElement('div');
+    labelEl.className = 'wire-label';
+    labelEl.contentEditable = 'true';
+    labelEl.spellcheck = true;
+    labelEl.dataset.id = connId;
+    labelEl.textContent = label || '';
+    board.appendChild(labelEl);
+
+    // hide placeholder once user starts editing/has content
+    function refreshPlaceholder() {
+      if (labelEl.textContent.length > 0) labelEl.classList.add('placeholder-hidden');
+      else labelEl.classList.remove('placeholder-hidden');
+    }
+    refreshPlaceholder();
+
+    labelEl.addEventListener('input', () => {
+      const rec = connections.get(connId);
+      if (rec) rec.label = labelEl.textContent;
+      refreshPlaceholder();
+      saveAll();
+    });
+    labelEl.addEventListener('focus', () => {
+      selectWire(connId);
+      labelEl.classList.add('placeholder-hidden');
+    });
+    labelEl.addEventListener('blur', () => refreshPlaceholder());
+    labelEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); labelEl.blur(); }
+      // Enter — обычный перенос строки (как в карточке). Ctrl+Enter — закрепить.
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); labelEl.blur(); }
+    });
+    // paste as plain text
+    labelEl.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const t = (e.clipboardData || window.clipboardData).getData('text/plain');
+      document.execCommand('insertText', false, t);
+    });
+
+    path.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectWire(connId);
+    });
+    path.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      labelEl.focus();
+      // place caret at end
+      const sel = window.getSelection(); const r = document.createRange();
+      r.selectNodeContents(labelEl); r.collapse(false);
+      sel.removeAllRanges(); sel.addRange(r);
+    });
+
+    connections.set(connId, { from: fromId, to: toId, label, pathEl: path, labelEl });
+    return connId;
+  }
+
+  function removeConnection(connId) {
+    const c = connections.get(connId);
+    if (!c) return;
+    c.pathEl.remove();
+    c.labelEl.remove();
+    connections.delete(connId);
+  }
+
+  function clearWireSelection() {
+    document.querySelectorAll('#wires .wire.selected').forEach(p => p.classList.remove('selected'));
+  }
+  function selectWire(connId) {
+    clearWireSelection();
+    const c = connections.get(connId);
+    if (c) c.pathEl.classList.add('selected');
+  }
+
+  function updateWiresFor(noteId) {
+    connections.forEach((c) => {
+      if (c.from === noteId || c.to === noteId) drawWire(c);
+    });
+  }
+  function updateAllWires() {
+    connections.forEach(drawWire);
+  }
+  function drawWire(c) {
+    const fromEl = notes.get(c.from)?.el;
+    const toEl = notes.get(c.to)?.el;
+    if (!fromEl || !toEl) return;
+    const fc = centerOf(fromEl), tc = centerOf(toEl);
+    const a = anchorPoint(fromEl, tc.x, tc.y);
+    const b = anchorPoint(toEl, fc.x, fc.y);
+    c.pathEl.setAttribute('d', curvePath(a, b));
+    // label at midpoint of the bezier (approx — midpoint of straight line between anchors works well visually)
+    const mx = (a.x + b.x) / 2;
+    const my = (a.y + b.y) / 2;
+    c.labelEl.style.left = mx + 'px';
+    c.labelEl.style.top  = my + 'px';
+  }
+  function centerOf(el) {
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }
+
+  // delete selected wire with Delete/Backspace (when not editing text)
+  document.addEventListener('keydown', (e) => {
+    const active = document.activeElement;
+    const editingText = active && active.isContentEditable;
+    if (!editingText && (e.key === 'Delete' || e.key === 'Backspace')) {
+      const selected = document.querySelector('#wires .wire.selected');
+      if (selected) {
+        e.preventDefault();
+        removeConnection(selected.dataset.id);
+        saveAll();
+      }
+    }
+  });
+
+  // click empty board area clears wire selection (already done in mousedown)
+  // ---------- formatting popover ----------
+  function showFmtFromSelection() {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) { hideFmt(); return; }
+    const anchorNode = sel.anchorNode;
+    if (!anchorNode) { hideFmt(); return; }
+    const host = (anchorNode.nodeType === 1 ? anchorNode : anchorNode.parentElement).closest('.pane');
+    if (!host) { hideFmt(); return; }
+    const rect = sel.getRangeAt(0).getBoundingClientRect();
+    if (!rect.width && !rect.height) { hideFmt(); return; }
+    fmt.classList.add('show');
+    const top = Math.max(8, rect.top - fmt.offsetHeight - 8);
+    let left = rect.left + rect.width / 2 - fmt.offsetWidth / 2;
+    left = Math.max(8, Math.min(window.innerWidth - fmt.offsetWidth - 8, left));
+    fmt.style.top = top + 'px';
+    fmt.style.left = left + 'px';
+  }
+  function hideFmt() { fmt.classList.remove('show'); }
+
+  document.addEventListener('selectionchange', () => {
+    requestAnimationFrame(showFmtFromSelection);
+  });
+
+  fmt.addEventListener('mousedown', (e) => e.preventDefault());
+  fmt.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    const cmd = btn.dataset.cmd;
+    const arg = btn.dataset.arg || null;
+    document.execCommand(cmd, false, arg);
+    requestAnimationFrame(showFmtFromSelection);
+    saveAll();
+  });
+
+  // keyboard shortcuts inside notes
+  document.addEventListener('keydown', (e) => {
+    const active = document.activeElement;
+    if (!active || !active.classList || !active.classList.contains('pane')) return;
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey) {
+      const k = e.key.toLowerCase();
+      if (k === 'b') { e.preventDefault(); document.execCommand('bold'); saveAll(); }
+      else if (k === 'i') { e.preventDefault(); document.execCommand('italic'); saveAll(); }
+      else if (k === 'u') { e.preventDefault(); document.execCommand('underline'); saveAll(); }
+    }
+    if (e.key === 'Delete' && e.ctrlKey) {
+      const note = active.closest('.note');
+      if (note) { e.preventDefault(); removeNote(note.dataset.id); }
+    }
+  });
+
+  document.getElementById('zoomReset').addEventListener('click', resetZoom);
+
+  // ---------- Anthropic API ----------
+  const KEY_STORAGE   = 'aiboard.anthropicKey';
+  const URL_STORAGE   = 'aiboard.apiUrl';
+  const MODEL_STORAGE = 'aiboard.apiModel';
+  const DEFAULT_URL   = 'https://api.anthropic.com';
+  const DEFAULT_MODEL = 'claude-sonnet-4-5';
+
+  // Нормализуем эндпоинт: принимаем как базу ("https://api.zenoid.space"),
+  // так и полный URL ("https://.../v1/messages").
+  function normalizeUrl(raw) {
+    let u = (raw || '').trim().replace(/\/+$/, '');
+    if (!u) u = DEFAULT_URL;
+    if (/\/messages$/i.test(u)) return u;
+    if (/\/v\d+$/i.test(u))    return u + '/messages';
+    return u + '/v1/messages';
+  }
+  function getApiUrl()   { return normalizeUrl(localStorage.getItem(URL_STORAGE) || DEFAULT_URL); }
+  function getApiModel() { return (localStorage.getItem(MODEL_STORAGE) || DEFAULT_MODEL).trim(); }
+
+  // Настройки: модалка
+  const settingsOverlay = document.getElementById('settings-overlay');
+  const setUrlEl   = document.getElementById('set-url');
+  const setKeyEl   = document.getElementById('set-key');
+  const setModelEl = document.getElementById('set-model');
+  function openSettings() {
+    setUrlEl.value   = localStorage.getItem(URL_STORAGE)   || '';
+    setKeyEl.value   = localStorage.getItem(KEY_STORAGE)   || '';
+    setModelEl.value = localStorage.getItem(MODEL_STORAGE) || '';
+    setUrlEl.placeholder   = DEFAULT_URL;
+    setModelEl.placeholder = DEFAULT_MODEL;
+    settingsOverlay.classList.add('show');
+    setTimeout(() => setKeyEl.focus(), 30);
+  }
+  function closeSettings() { settingsOverlay.classList.remove('show'); }
+  document.getElementById('openSettings').addEventListener('click', openSettings);
+  document.getElementById('set-cancel').addEventListener('click', closeSettings);
+  settingsOverlay.addEventListener('click', (e) => {
+    if (e.target === settingsOverlay) closeSettings();
+  });
+  document.getElementById('set-save').addEventListener('click', () => {
+    const url = setUrlEl.value.trim();
+    const key = setKeyEl.value.trim();
+    const mdl = setModelEl.value.trim();
+    if (url) localStorage.setItem(URL_STORAGE, url);   else localStorage.removeItem(URL_STORAGE);
+    if (mdl) localStorage.setItem(MODEL_STORAGE, mdl); else localStorage.removeItem(MODEL_STORAGE);
+    if (key) localStorage.setItem(KEY_STORAGE, key);
+    closeSettings();
+  });
+  document.getElementById('set-clear').addEventListener('click', () => {
+    if (!confirm('Удалить сохранённый API-ключ?')) return;
+    localStorage.removeItem(KEY_STORAGE);
+    setKeyEl.value = '';
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && settingsOverlay.classList.contains('show')) closeSettings();
+  });
+
+  function getApiKey() {
+    let key = (localStorage.getItem(KEY_STORAGE) || '').trim();
+    if (key) return key;
+    // Простой запрос ключа, если ничего не настроено
+    key = (prompt('Введите API-ключ для ' + getApiUrl() + '\n\nКлюч сохранится в этом браузере. Расширенные настройки — кнопка ⚙ в верхней панели.') || '').trim();
+    if (!key) throw new Error('Нужен API-ключ');
+    localStorage.setItem(KEY_STORAGE, key);
+    return key;
+  }
+
+  async function generateAlgorithm(idea) {
+    const key = getApiKey();
+    const url = getApiUrl();
+    const model = getApiModel();
+    const userPrompt = 'Преобразуй идею в чёткий пошаговый алгоритм на русском. Верни только пронумерованные шаги (1. … 2. …), коротко и по делу, без вступлений и заключений.\n\nИдея:\n"""\n' + idea + '\n"""';
+    let res;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': key,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 1024,
+          messages: [{ role: 'user', content: userPrompt }],
+        }),
+      });
+    } catch (e) {
+      // fetch() бросает TypeError на CORS-блок без подробностей. Подскажем где смотреть.
+      throw new Error(
+        'Запрос не дошёл (' + e.name + ': ' + e.message + ').\n\n' +
+        'Скорее всего CORS: эндпоинт не пускает браузерные запросы. Откройте F12 → Network → preflight OPTIONS.\n' +
+        'Изолировать причину можно в test-api.html (рядом с этим файлом).'
+      );
+    }
+    if (res.status === 401 || res.status === 403) {
+      localStorage.removeItem(KEY_STORAGE);
+      throw new Error('Ключ неверный — введите заново (⚙)');
+    }
+    if (!res.ok) {
+      let detail = '';
+      try { detail = (await res.json()).error?.message || ''; } catch (_) {}
+      throw new Error('HTTP ' + res.status + (detail ? ' — ' + detail : ''));
+    }
+    const data = await res.json();
+    const block = (data.content || []).find(b => b.type === 'text');
+    const txt = block?.text || data.choices?.[0]?.message?.content; // на случай OpenAI-совместимого прокси
+    if (!txt) throw new Error('Пустой ответ модели');
+    return String(txt).trim();
+  }
+
+  // clear-all
+  document.getElementById('clearAll').addEventListener('click', () => {
+    if (!notes.size && !connections.size) return;
+    if (!confirm('Удалить все карточки и стрелки?')) return;
+    [...connections.keys()].forEach(removeConnection);
+    [...notes.keys()].forEach(id => { notes.get(id).el.remove(); notes.delete(id); });
+    saveAll();
+  });
+
+  // paste plain text inside notes
+  document.addEventListener('paste', (e) => {
+    const active = document.activeElement;
+    if (!active || !active.classList || !active.classList.contains('pane')) return;
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+    document.execCommand('insertText', false, text);
+  });
+
+  // redraw wires on window resize / scroll
+  window.addEventListener('resize', updateAllWires);
+
+  loadAll();
+  applyTransform();
+})();
+</script>
+</body>
+</html>

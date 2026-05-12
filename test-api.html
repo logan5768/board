@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<title>API-тест Zenoid / Anthropic</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f3f4f6;
+    color: #111;
+  }
+  h1 { margin: 0 0 16px; font-size: 18px; }
+  .card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 18px;
+    margin-bottom: 14px;
+    max-width: 920px;
+  }
+  label { display: block; font-size: 12px; font-weight: 600; color: #374151; margin: 10px 0 4px; }
+  input, textarea, select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    outline: none;
+  }
+  input:focus, textarea:focus, select:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,.15); }
+  textarea { min-height: 70px; resize: vertical; }
+  .row { display: flex; gap: 10px; align-items: flex-end; margin-top: 12px; flex-wrap: wrap; }
+  .row > * { flex: 1; min-width: 200px; }
+  button {
+    padding: 9px 16px;
+    border: 0;
+    border-radius: 6px;
+    background: #2563eb;
+    color: #fff;
+    font-size: 13px;
+    cursor: pointer;
+    min-width: 140px;
+  }
+  button:hover { background: #1d4ed8; }
+  button.secondary { background: #e5e7eb; color: #111; }
+  button.secondary:hover { background: #d1d5db; }
+  .small { font-size: 11px; color: #6b7280; margin-top: 4px; }
+
+  .checks { display: flex; flex-wrap: wrap; gap: 16px; margin: 12px 0 0; font-size: 13px; }
+  .checks label { font-weight: 500; display: inline-flex; align-items: center; gap: 6px; margin: 0; }
+
+  pre.result {
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 12px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 12px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin-top: 12px;
+  }
+  pre.result.ok    { background: #052e1a; }
+  pre.result.fail  { background: #3f1d1d; }
+  .key-row { display: flex; gap: 8px; }
+  .key-row input { flex: 1; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; margin-left: 6px; }
+  .badge.ok { background: #d1fae5; color: #065f46; }
+  .badge.fail { background: #fee2e2; color: #991b1b; }
+  .badge.warn { background: #fef3c7; color: #92400e; }
+
+  details { margin-top: 10px; }
+  summary { cursor: pointer; font-weight: 600; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<h1>Изолированный тест запроса к API (Anthropic-совместимое)</h1>
+
+<div class="card">
+  <label for="url">Endpoint (можно базу или полный URL)</label>
+  <input id="url" type="text" spellcheck="false" placeholder="https://api.zenoid.space" />
+
+  <label for="key">API-ключ</label>
+  <div class="key-row">
+    <input id="key" type="password" spellcheck="false" placeholder="sk-zen-…" />
+    <button class="secondary" type="button" id="showKey">показать</button>
+  </div>
+
+  <label for="model">Модель</label>
+  <input id="model" type="text" spellcheck="false" placeholder="claude-sonnet-4-7" />
+
+  <label for="msg">Сообщение пользователя</label>
+  <textarea id="msg" spellcheck="false">hi</textarea>
+
+  <div class="checks">
+    <strong style="font-weight:600;font-size:12px;color:#374151;align-self:center;">Заголовки:</strong>
+    <label><input type="checkbox" id="h-xkey" checked /> x-api-key</label>
+    <label><input type="checkbox" id="h-bearer" /> Authorization: Bearer</label>
+    <label><input type="checkbox" id="h-version" checked /> anthropic-version</label>
+    <label><input type="checkbox" id="h-browser" checked /> anthropic-dangerous-direct-browser-access</label>
+  </div>
+
+  <div class="row">
+    <div>
+      <label for="proxy">CORS-прокси (опционально)</label>
+      <select id="proxy">
+        <option value="">— без прокси (прямой запрос) —</option>
+        <option value="https://corsproxy.io/?">https://corsproxy.io/?&lt;url&gt;</option>
+        <option value="https://api.allorigins.win/raw?url=">https://api.allorigins.win/raw?url=&lt;url&gt;</option>
+        <option value="https://cors-anywhere.herokuapp.com/">https://cors-anywhere.herokuapp.com/&lt;url&gt; (нужна предварительная активация)</option>
+      </select>
+      <div class="small">Если прямой запрос падает с CORS — попробуйте через прокси (только для тестов, ключ уходит через сторонний сервер).</div>
+    </div>
+    <button id="send" type="button">Отправить → /v1/messages</button>
+  </div>
+
+  <pre id="result" class="result">Готов к запросу. Заполните поля и нажмите «Отправить».</pre>
+
+  <details>
+    <summary>Что показывает результат</summary>
+    <div class="small">
+      <p><b>HTTP &lt;статус&gt;</b> — сервер ответил. Дальше смотрите тело ответа (JSON с ошибкой или с <code>content[0].text</code>).</p>
+      <p><b>TypeError: Failed to fetch</b> — почти всегда CORS-блок браузера: сервер не вернул нужные заголовки <code>Access-Control-Allow-Origin / -Headers / -Methods</code> в ответ на preflight (OPTIONS). У основного приложения тот же симптом «Сеть недоступна».</p>
+      <p><b>Как лечится:</b> 1) включить CORS-прокси из списка выше; 2) обратиться к провайдеру (zenoid), пускают ли они браузерные запросы и какие заголовки разрешают; 3) запускать страницу через локальный прокси, который сам отправляет запрос на API и возвращает ответ.</p>
+    </div>
+  </details>
+</div>
+
+<div class="card">
+  <strong>Эквивалентный curl</strong> <span class="badge warn">сгенерируется после отправки</span>
+  <pre id="curl" class="result" style="background:#1f2937;">—</pre>
+</div>
+
+<script>
+const STORAGE = 'aiboard.test.';
+const $ = id => document.getElementById(id);
+
+// Подтянуть значения из основного приложения (если есть)
+$('url').value   = localStorage.getItem('aiboard.apiUrl')        || localStorage.getItem(STORAGE+'url')   || '';
+$('key').value   = localStorage.getItem('aiboard.anthropicKey')  || localStorage.getItem(STORAGE+'key')   || '';
+$('model').value = localStorage.getItem('aiboard.apiModel')      || localStorage.getItem(STORAGE+'model') || '';
+
+['url','key','model','msg'].forEach(id => {
+  $(id).addEventListener('input', () => localStorage.setItem(STORAGE+id, $(id).value));
+});
+
+$('showKey').addEventListener('click', () => {
+  const k = $('key');
+  k.type = (k.type === 'password' ? 'text' : 'password');
+});
+
+function normalizeUrl(raw) {
+  let u = (raw || '').trim().replace(/\/+$/, '');
+  if (!u) return '';
+  if (/\/messages$/i.test(u)) return u;
+  if (/\/v\d+$/i.test(u))    return u + '/messages';
+  return u + '/v1/messages';
+}
+
+function show(text, cls) {
+  const r = $('result');
+  r.className = 'result' + (cls ? ' ' + cls : '');
+  r.textContent = text;
+}
+
+function buildCurl(url, headers, body) {
+  const parts = ['curl -i ' + JSON.stringify(url)];
+  for (const [k, v] of Object.entries(headers)) {
+    parts.push('  -H ' + JSON.stringify(k + ': ' + v));
+  }
+  parts.push('  --data ' + JSON.stringify(JSON.stringify(body)));
+  return parts.join(' \\\n');
+}
+
+$('send').addEventListener('click', async () => {
+  const baseUrl = normalizeUrl($('url').value);
+  const key     = $('key').value.trim();
+  const model   = $('model').value.trim() || 'claude-sonnet-4-7';
+  const userMsg = $('msg').value || 'hi';
+  const proxy   = $('proxy').value;
+
+  if (!baseUrl) { show('Заполните Endpoint.', 'fail'); return; }
+  if (!key)     { show('Заполните API-ключ.', 'fail'); return; }
+
+  // Сохраним в «общее» хранилище основного приложения, чтобы потом не вводить дважды.
+  localStorage.setItem('aiboard.apiUrl',       $('url').value.trim());
+  localStorage.setItem('aiboard.apiModel',     $('model').value.trim());
+  localStorage.setItem('aiboard.anthropicKey', key);
+
+  const headers = { 'content-type': 'application/json' };
+  if ($('h-xkey').checked)    headers['x-api-key']           = key;
+  if ($('h-bearer').checked)  headers['authorization']       = 'Bearer ' + key;
+  if ($('h-version').checked) headers['anthropic-version']   = '2023-06-01';
+  if ($('h-browser').checked) headers['anthropic-dangerous-direct-browser-access'] = 'true';
+
+  const body = {
+    model,
+    max_tokens: 256,
+    messages: [{ role: 'user', content: userMsg }],
+  };
+
+  const realUrl = proxy ? proxy + encodeURIComponent(baseUrl) : baseUrl;
+  $('curl').textContent = buildCurl(baseUrl, headers, body);
+
+  show('Отправляю запрос на ' + realUrl + ' …');
+
+  const t0 = performance.now();
+  let res;
+  try {
+    res = await fetch(realUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    const dt = (performance.now() - t0).toFixed(0);
+    show(
+      'СЕТЕВАЯ ОШИБКА за ' + dt + ' мс\n\n' +
+      err.name + ': ' + err.message + '\n\n' +
+      '— Обычно это CORS-блок: сервер не разрешил браузеру делать запрос. ' +
+      'Откройте DevTools (F12) → вкладка Network → найдите запрос к ' + baseUrl + ' и preflight OPTIONS. ' +
+      'Если в OPTIONS не хватает Access-Control-Allow-Origin / -Headers — это и есть причина.\n\n' +
+      '— Чтобы убедиться, что ключ и URL валидны, выполните тот же curl из терминала (см. блок ниже).',
+      'fail'
+    );
+    return;
+  }
+  const dt = (performance.now() - t0).toFixed(0);
+
+  const statusLine = 'HTTP ' + res.status + ' ' + res.statusText + '   (' + dt + ' мс)';
+  let bodyText = '';
+  try { bodyText = await res.text(); } catch (_) { bodyText = '<не удалось прочитать тело ответа>'; }
+
+  // Попробуем красиво вывести JSON, если это JSON
+  let pretty = bodyText;
+  try { pretty = JSON.stringify(JSON.parse(bodyText), null, 2); } catch (_) {}
+
+  // Попробуем извлечь текст ответа модели (Anthropic-формат)
+  let extracted = '';
+  try {
+    const j = JSON.parse(bodyText);
+    if (j.content && j.content[0] && j.content[0].text) extracted = j.content[0].text;
+    else if (j.choices && j.choices[0] && j.choices[0].message) extracted = j.choices[0].message.content;
+  } catch (_) {}
+
+  const headerList = [];
+  res.headers.forEach((v, k) => headerList.push('  ' + k + ': ' + v));
+
+  show(
+    statusLine + '\n' +
+    'response headers:\n' + headerList.join('\n') + '\n\n' +
+    'body:\n' + pretty +
+    (extracted ? '\n\n— Извлечённый текст ответа модели —\n' + extracted : ''),
+    res.ok ? 'ok' : 'fail'
+  );
+});
+</script>
+
+</body>
+</html>
