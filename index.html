@@ -386,44 +386,82 @@
   #settings button.danger:hover { background: #fef2f2; }
 
   /* ===== Chat Panel ===== */
+  /* Панель — левый край экрана. Видна только вкладка (правый край панели = 24px).
+     При наведении / фокусе внутри — выезжает целиком на 25vw. */
   #chat-panel {
     position: fixed;
-    top: 0; right: 0;
-    width: 320px;
-    height: 100%;
-    background: #ffffff;
-    border-left: 1px solid #e5e7eb;
-    box-shadow: -4px 0 24px rgba(0,0,0,.08);
+    left: 0; top: 0; height: 100%;
+    width: 25vw;
+    min-width: 280px;
+    display: flex;
+    flex-direction: row;
+    transform: translateX(calc(-100% + 24px));
+    transition: transform .25s cubic-bezier(.4,0,.2,1);
+    z-index: 900;
+  }
+  #chat-panel:hover,
+  #chat-panel:focus-within {
+    transform: translateX(0);
+  }
+  /* Основная область чата (слева внутри панели) */
+  #chat-content {
+    flex: 1;
+    min-width: 0;
+    background: #fff;
     display: flex;
     flex-direction: column;
-    z-index: 900;
-    transform: translateX(100%);
-    transition: transform .25s cubic-bezier(.4,0,.2,1);
+    border-right: 1px solid #e5e7eb;
+    box-shadow: 4px 0 20px rgba(0,0,0,.10);
   }
-  #chat-panel.open { transform: translateX(0); }
+  /* Вертикальная плашка-ручка (правый край панели, всегда видна) */
+  #chat-tab {
+    flex: 0 0 24px;
+    width: 24px;
+    background: #f1f5f9;
+    border-right: 1px solid #cbd5e1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 0 20px;
+    gap: 16px;
+    cursor: default;
+  }
+  /* Якорь для стрелок */
   #chat-anchor {
-    position: absolute;
-    left: -12px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 24px; height: 24px;
+    width: 20px; height: 20px;
     border-radius: 50%;
-    background: #6b7280;
-    border: 2px solid #fff;
-    box-shadow: 0 0 0 2px #9ca3af;
+    background: #94a3b8;
+    border: 2px solid #f1f5f9;
+    box-shadow: 0 0 0 1.5px #94a3b8;
     cursor: crosshair;
-    z-index: 910;
-    transition: box-shadow .15s, background .15s;
+    flex-shrink: 0;
+    transition: background .15s, box-shadow .15s;
   }
-  #chat-anchor:hover { background: #374151; box-shadow: 0 0 0 4px rgba(107,114,128,.4); }
-  #chat-anchor.has-context { background: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,.4); }
-  #chat-anchor.link-target-anchor { background: #059669; box-shadow: 0 0 0 6px rgba(16,185,129,.5); }
+  #chat-anchor.has-context {
+    background: #10b981;
+    box-shadow: 0 0 0 2px rgba(16,185,129,.5);
+  }
+  #chat-anchor.link-target-anchor {
+    background: #059669;
+    box-shadow: 0 0 0 5px rgba(16,185,129,.45);
+  }
+  /* Вертикальный текст «ЧАТ» на плашке */
+  #chat-tab-label {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    font-size: 9px;
+    letter-spacing: .1em;
+    color: #94a3b8;
+    user-select: none;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
   #chat-header {
     flex: 0 0 auto;
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 10px 12px 10px 20px;
+    padding: 10px 12px;
     border-bottom: 1px solid #e5e7eb;
     font-size: 13px;
     font-weight: 600;
@@ -525,11 +563,6 @@
     animation: aiboard-spin .8s linear infinite;
   }
   #btn-send-chat.loading .btn-spinner { display: inline-block; }
-  #toggleChat {
-    border: 1px solid #e5e7eb;
-    background: #f9fafb;
-  }
-  #toggleChat.active { background: #2563eb; color: #fff; border-color: #2563eb; }
   .note.in-context {
     border-color: #10b981 !important;
     box-shadow: 0 0 0 3px rgba(16,185,129,.45), var(--note-shadow) !important;
@@ -600,7 +633,6 @@
 <body>
   <div id="toolbar">
     <span class="hint">ЛКМ-протяжка — карточка. «↗» — стрелка. ПКМ — двигать доску. Ctrl+ПКМ или колесо — зум. Двойной клик ПКМ — 100%.</span>
-    <button id="toggleChat" title="Чат с Claude (открыть/закрыть)">💬</button>
     <button id="addNote" title="Добавить карточку">＋</button>
     <button id="zoomReset" title="Сбросить масштаб (100%)">100%</button>
     <button id="openSettings" title="API-настройки (ключ, эндпоинт, модель)">⚙</button>
@@ -660,19 +692,24 @@
   </div>
 
 <div id="chat-panel">
-  <div id="chat-anchor" title="Соедините карточку стрелкой сюда — она попадёт в контекст"></div>
-  <div id="chat-header">
-    <span class="chat-title">Чат с Claude</span>
-    <span id="chat-context-count">0 карточек</span>
-    <button id="btn-clear-chat" title="Очистить историю чата">Очистить</button>
+  <div id="chat-content">
+    <div id="chat-header">
+      <span class="chat-title">Чат с Claude</span>
+      <span id="chat-context-count">0 карточек</span>
+      <button id="btn-clear-chat" title="Очистить историю чата">Очистить</button>
+    </div>
+    <div id="chat-messages"></div>
+    <div id="chat-input-area">
+      <textarea id="chat-input" placeholder="Напишите сообщение… (Ctrl+Enter — отправить)" rows="3"></textarea>
+      <button id="btn-send-chat">
+        <span>Отправить</span>
+        <span class="btn-spinner"></span>
+      </button>
+    </div>
   </div>
-  <div id="chat-messages"></div>
-  <div id="chat-input-area">
-    <textarea id="chat-input" placeholder="Напишите сообщение… (Ctrl+Enter — отправить)" rows="3"></textarea>
-    <button id="btn-send-chat">
-      <span>Отправить</span>
-      <span class="btn-spinner"></span>
-    </button>
+  <div id="chat-tab">
+    <div id="chat-anchor" title="Тяните стрелку с карточки сюда — добавить в контекст"></div>
+    <span id="chat-tab-label">ЧАТ</span>
   </div>
 </div>
 
@@ -706,12 +743,10 @@
   const btnSendChat      = document.getElementById('btn-send-chat');
   const btnClearChat     = document.getElementById('btn-clear-chat');
   const chatContextCount = document.getElementById('chat-context-count');
-  const toggleChatBtn    = document.getElementById('toggleChat');
   const confirmOverlay   = document.getElementById('confirm-overlay');
   const confirmPreview   = document.getElementById('confirm-preview');
-  let chatMessages  = [];
-  let chatPanelOpen = false;
-  let chatSending   = false;
+  let chatMessages = [];
+  let chatSending  = false;
 
   // ---------- zoom / pan ----------
   let zoom = 1, tx = 0, ty = 0;
@@ -1312,9 +1347,7 @@
   }
 
   function noteAtPoint(x, y, excludeId) {
-    if (chatPanelOpen && excludeId !== CHAT_PANEL_ID) {
-      if (isOnChatAnchor(x, y)) return chatAnchor;
-    }
+    if (excludeId !== CHAT_PANEL_ID && isOnChatAnchor(x, y)) return chatAnchor;
     // hit-test all notes (topmost wins)
     const arr = [...notes.values()].sort((a, b) =>
       parseFloat(b.el.style.zIndex || 0) - parseFloat(a.el.style.zIndex || 0));
@@ -1453,9 +1486,7 @@
   }
   function drawWire(c) {
     const fromEl = notes.get(c.from)?.el;
-    const toEl = c.to === CHAT_PANEL_ID
-      ? (chatPanelOpen ? chatAnchor : null)
-      : notes.get(c.to)?.el;
+    const toEl = c.to === CHAT_PANEL_ID ? chatAnchor : notes.get(c.to)?.el;
     if (!fromEl || !toEl) {
       if (c.pathEl) c.pathEl.setAttribute('d', '');
       if (c.labelEl) c.labelEl.style.display = 'none';
@@ -1692,7 +1723,6 @@
   }
 
   function getContextNoteIds() {
-    if (!chatPanelOpen) return new Set();
     const direct = new Set();
     connections.forEach(c => {
       if (c.to === CHAT_PANEL_ID && notes.has(c.from)) direct.add(c.from);
@@ -1712,14 +1742,6 @@
     chatAnchor.classList.toggle('has-context', ctx.size > 0);
     chatContextCount.textContent = ctx.size ? `${ctx.size} карт.` : '0 карточек';
     chatContextCount.classList.toggle('active', ctx.size > 0);
-  }
-
-  function toggleChatPanel() {
-    chatPanelOpen = !chatPanelOpen;
-    chatPanel.classList.toggle('open', chatPanelOpen);
-    toggleChatBtn.classList.toggle('active', chatPanelOpen);
-    updateAllWires();
-    updateContextGlows();
   }
 
   function appendChatMessage(role, text) {
@@ -1853,7 +1875,7 @@
     const confirmed = await showConfirmModal(title, content);
     let resultText;
     if (confirmed) {
-      const cx = window.innerWidth / 2 - (chatPanelOpen ? 160 : 0);
+      const cx = window.innerWidth / 2;
       const cy = window.innerHeight / 2;
       const wp = screenToWorld(cx, cy);
       createNote(wp.x - 120, wp.y - 70, 240, 140, '', null, null, title, '', 'idea');
@@ -1923,7 +1945,6 @@
   }
 
   // Chat event wiring
-  toggleChatBtn.addEventListener('click', toggleChatPanel);
   btnSendChat.addEventListener('click', sendChatMessage);
   chatInput.addEventListener('keydown', e => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); sendChatMessage(); }
