@@ -12,6 +12,7 @@
     --accent: #2563eb;
     --arrow: #374151;
     --arrow-hover: #2563eb;
+    --chat-width: 340px;
   }
   * { box-sizing: border-box; }
   html, body {
@@ -50,9 +51,11 @@
     pointer-events: none;
     z-index: 1;
   }
-  #wires .wire { pointer-events: stroke; cursor: pointer; }
-  #wires .wire:hover { stroke: var(--arrow-hover); }
+  #wires .wire { pointer-events: none; }
+  #wires .wire.hover { stroke: #ef4444; }
   #wires .wire.selected { stroke: var(--arrow-hover); }
+  /* Невидимая широкая дорожка поверх линии — большой хитбокс для клика/ПКМ */
+  #wires .wire-hit { pointer-events: stroke; cursor: pointer; fill: none; }
   #wires .ghost { pointer-events: none; stroke-dasharray: 6 5; opacity: .8; }
 
   /* Floating label over wire */
@@ -120,8 +123,8 @@
   }
 
   .note .bar {
-    height: 26px;
-    flex: 0 0 26px;
+    height: 32px;
+    flex: 0 0 32px;
     background: linear-gradient(180deg, #f3f4f6, #e5e7eb);
     border-bottom: 1px solid #d1d5db;
     cursor: grab;
@@ -162,6 +165,11 @@
     font-weight: 500;
   }
   .note .title:focus:empty::before { content: ""; }
+  .note.titling .title:empty::before {
+    content: "✦ придумываю заголовок…";
+    color: #f97316;
+    font-weight: 500;
+  }
   .note .bar:active { cursor: grabbing; }
   .note .dots { display: flex; gap: 4px; }
   .note .dots span {
@@ -170,24 +178,24 @@
   }
   .note .bar-right { display: flex; align-items: center; gap: 4px; }
   .note .link {
-    width: 16px; height: 16px;
+    width: 26px; height: 26px;
     display: grid; place-items: center;
-    border-radius: 4px;
+    border-radius: 5px;
     cursor: crosshair;
     color: #374151;
     background: #fff;
     border: 1px solid #9ca3af;
-    font-size: 11px;
+    font-size: 16px;
     line-height: 1;
     user-select: none;
   }
   .note .link:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
   .note .del {
-    font-size: 13px;
+    font-size: 20px;
     line-height: 1;
-    width: 16px; height: 16px;
+    width: 26px; height: 26px;
     display: grid; place-items: center;
-    border-radius: 3px;
+    border-radius: 5px;
     cursor: pointer;
     color: #6b7280;
   }
@@ -215,12 +223,18 @@
     color: #9ca3af; pointer-events: none;
   }
   .note .pane.algorithm {
+    cursor: default;
+    display: block;
+  }
+  .note .pane.algorithm svg { max-width: 100%; height: auto; display: block; }
+  .note .pane.algorithm.diagram-error {
     font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
-    font-size: 13.5px;
-    line-height: 1.55;
+    font-size: 12.5px;
+    color: #b91c1b;
+    white-space: pre-wrap;
   }
   .note .pane.algorithm:empty::before {
-    content: "Нажмите ▶ — сгенерируется алгоритм";
+    content: "Нажмите ▶ — сгенерируется Mermaid-диаграмма";
     color: #9ca3af; pointer-events: none;
   }
 
@@ -305,6 +319,10 @@
     cursor: pointer; font-size: 13px;
   }
   #toolbar button:hover { background: #e5e7eb; }
+  #toolbar button svg { width: 16px; height: 16px; display: block; }
+  /* Лампочка: в светлой теме «горит» (залита тёплым), в тёмной — погашена */
+  #theme-bulb { fill: #fbbf24; }
+  html.dark #theme-bulb { fill: none; }
 
   /* text-formatting popover */
   #fmt {
@@ -329,61 +347,30 @@
   #fmt button:hover { background: rgba(255,255,255,.15); }
   #fmt .sep { width: 1px; background: rgba(255,255,255,.2); margin: 4px 2px; }
 
-  /* Окно настроек API */
-  #settings-overlay {
-    position: fixed; inset: 0;
-    background: rgba(17,24,39,.45);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    z-index: 3000;
+  /* Баннер авторизации в чате */
+  #chat-auth-banner {
+    flex: 0 0 auto;
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px;
+    background: #fffbeb;
+    border-bottom: 1px solid #fde68a;
+    font-size: 12.5px;
+    color: #92400e;
   }
-  #settings-overlay.show { display: flex; }
-  #settings {
-    background: #fff;
-    border-radius: 12px;
-    box-shadow: 0 20px 50px rgba(0,0,0,.25);
-    width: min(460px, 92vw);
-    padding: 18px 18px 14px;
-    font-size: 13px;
-  }
-  #settings h3 { margin: 0 0 12px; font-size: 15px; }
-  #settings label {
-    display: block;
-    font-weight: 600;
-    color: #374151;
-    margin: 10px 0 4px;
-  }
-  #settings input {
-    width: 100%;
-    padding: 8px 10px;
-    border: 1px solid #d1d5db;
+  #chat-auth-banner[hidden] { display: none; }
+  #chat-auth-text { flex: 1; }
+  #chat-auth-login {
+    padding: 4px 12px;
+    border: none;
     border-radius: 6px;
-    font-size: 13px;
-    font-family: ui-monospace, Menlo, Consolas, monospace;
-    outline: none;
-  }
-  #settings input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,.15); }
-  #settings .hint { color: #6b7280; font-size: 12px; margin-top: 4px; }
-  #settings .row {
-    display: flex; justify-content: flex-end; gap: 8px;
-    margin-top: 14px;
-  }
-  #settings button {
-    padding: 7px 14px;
-    border-radius: 6px;
-    border: 1px solid #d1d5db;
-    background: #fff;
+    background: var(--accent);
+    color: #fff;
+    font-size: 12.5px;
     cursor: pointer;
-    font-size: 13px;
+    white-space: nowrap;
   }
-  #settings button.primary {
-    background: var(--accent); color: #fff; border-color: var(--accent);
-  }
-  #settings button.danger { color: #b91c1c; border-color: #fecaca; }
-  #settings button:hover { background: #f3f4f6; }
-  #settings button.primary:hover { background: #1d4ed8; }
-  #settings button.danger:hover { background: #fef2f2; }
+  #chat-auth-login:hover { background: #1d4ed8; }
+  #chat-auth-login:disabled { opacity: .6; cursor: progress; }
 
   /* ===== Chat Panel ===== */
   #chat-panel {
@@ -401,23 +388,12 @@
     transition: transform .25s cubic-bezier(.4,0,.2,1);
   }
   #chat-panel.open { transform: translateX(0); }
-  #chat-anchor {
-    position: absolute;
-    left: -12px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 24px; height: 24px;
-    border-radius: 50%;
-    background: #6b7280;
-    border: 2px solid #fff;
-    box-shadow: 0 0 0 2px #9ca3af;
-    cursor: crosshair;
-    z-index: 910;
-    transition: box-shadow .15s, background .15s;
+  /* Стрелки крепятся ко всей панели чата. Подсветка контекста/цели — на ней же. */
+  #chat-panel.has-context { border-left-color: #10b981; }
+  #chat-panel.link-target-panel {
+    border-left-color: #059669;
+    box-shadow: -4px 0 24px rgba(0,0,0,.08), inset 4px 0 0 #10b981;
   }
-  #chat-anchor:hover { background: #374151; box-shadow: 0 0 0 4px rgba(107,114,128,.4); }
-  #chat-anchor.has-context { background: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,.4); }
-  #chat-anchor.link-target-anchor { background: #059669; box-shadow: 0 0 0 6px rgba(16,185,129,.5); }
   #chat-header {
     flex: 0 0 auto;
     display: flex;
@@ -430,6 +406,18 @@
     color: #111;
   }
   #chat-header .chat-title { flex: 1; }
+  #chat-model {
+    font-size: 11px;
+    font-weight: 400;
+    padding: 2px 4px;
+    border: 1px solid #e5e7eb;
+    border-radius: 5px;
+    background: #fff;
+    color: #374151;
+    cursor: pointer;
+    outline: none;
+    flex-shrink: 0;
+  }
   #chat-context-count {
     font-size: 11px;
     font-weight: 400;
@@ -503,17 +491,20 @@
   #chat-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
   #btn-send-chat {
     align-self: flex-end;
-    padding: 6px 16px;
+    width: 38px; height: 38px;
+    padding: 0;
     background: var(--accent);
     color: #fff;
     border: none;
-    border-radius: 7px;
-    font-size: 13px;
+    border-radius: 9px;
+    font-size: 17px;
+    line-height: 1;
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 6px;
+    display: grid;
+    place-items: center;
   }
+  #btn-send-chat .send-icon { display: block; }
+  #btn-send-chat.loading .send-icon { display: none; }
   #btn-send-chat:hover { background: #1d4ed8; }
   #btn-send-chat:disabled { opacity: .55; cursor: not-allowed; }
   .btn-spinner {
@@ -571,6 +562,27 @@
   #confirm-dialog button:hover { background: #f3f4f6; }
   #confirm-dialog button.primary:hover { background: #1d4ed8; }
 
+  /* ---- Desktop: chat panel always docked & resizable ---- */
+  #chat-resizer {
+    position: absolute;
+    left: -3px; top: 0; bottom: 0;
+    width: 8px;
+    cursor: ew-resize;
+    z-index: 920;
+    display: none;
+  }
+  #chat-resizer:hover { background: rgba(37,99,235,.25); }
+  @media (min-width: 601px) {
+    #chat-panel {
+      transform: none !important;
+      transition: none;
+      width: var(--chat-width, 340px);
+    }
+    #chat-resizer { display: block; }
+    #toggleChat { display: none; }
+    #toolbar { left: calc((100% - var(--chat-width, 340px)) / 2); }
+  }
+
   /* ---- Mobile / touch ---- */
   @media (max-width: 600px) {
     #toolbar {
@@ -595,7 +607,95 @@
     .handle.n, .handle.s { height: 24px; }
     .handle.ne, .handle.nw, .handle.se, .handle.sw { width: 28px; height: 28px; }
   }
+
+  /* ===== Тёмная тема (класс .dark на <html>, кнопка 🌙 в тулбаре) ===== */
+  html.dark {
+    color-scheme: dark;
+    --note-bg: #1e222b;
+    --note-border: #4b5563;
+    --note-shadow: 0 2px 8px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.3);
+    --accent: #3b82f6;
+    --arrow: #9ca3af;
+    --arrow-hover: #60a5fa;
+  }
+  html.dark body { background: #0f1115; color: #e5e7eb; }
+  html.dark #board {
+    background:
+      radial-gradient(circle at 1px 1px, #262a33 1px, transparent 0) 0 0 / 24px 24px,
+      #0f1115;
+  }
+  html.dark .wire-label { background: #1f2937; border-color: #4b5563; color: #e5e7eb; box-shadow: 0 2px 6px rgba(0,0,0,.35); }
+  html.dark .note:hover { box-shadow: 0 4px 14px rgba(0,0,0,.5), 0 12px 32px rgba(0,0,0,.4); }
+  html.dark .note .bar { background: linear-gradient(180deg, #262b36, #1c212b); border-bottom-color: #374151; }
+  html.dark .note .title { color: #e5e7eb; }
+  html.dark .note .title:hover { background: rgba(255,255,255,.08); }
+  html.dark .note .title:focus { background: #111827; }
+  html.dark .note .dots span { background: #4b5563; }
+  html.dark .note .link { color: #d1d5db; background: #1f2937; border-color: #4b5563; }
+  html.dark .note .del { color: #9ca3af; }
+  html.dark .note .del:hover { background: #7f1d1d; color: #fecaca; }
+  html.dark .note .pane { color: #e5e7eb; }
+  html.dark .note .pane.algorithm.diagram-error { color: #fca5a5; }
+  html.dark .note .tabs { background: #181c24; border-top-color: #374151; }
+  html.dark .note .tab-btn { background: #1f2937; color: #d1d5db; border-color: #4b5563; }
+  html.dark .note .tab-btn:hover { background: #374151; }
+  html.dark #toolbar { background: #1b1f27; border-color: #374151; box-shadow: 0 4px 16px rgba(0,0,0,.45); color: #e5e7eb; }
+  html.dark #toolbar .hint { color: #9ca3af; }
+  html.dark #toolbar button { background: #2b3140; color: #e5e7eb; }
+  html.dark #toolbar button:hover { background: #374151; }
+  html.dark #toggleChat { border-color: #374151; background: #2b3140; }
+  html.dark #toggleChat.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  html.dark #confirm-overlay { background: rgba(0,0,0,.6); }
+  html.dark #confirm-dialog { background: #1b1f27; color: #e5e7eb; }
+  html.dark #confirm-dialog button { background: #2b3140; border-color: #4b5563; color: #e5e7eb; }
+  html.dark #confirm-dialog button:hover { background: #374151; }
+  html.dark #confirm-dialog button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  html.dark #confirm-dialog button.primary:hover { background: #2563eb; }
+  html.dark #confirm-dialog .preview { background: #111827; border-color: #374151; color: #d1d5db; }
+  html.dark #chat-auth-banner { background: #2a2113; border-bottom-color: #78350f; color: #fcd34d; }
+  html.dark #chat-panel { background: #161a22; border-left-color: #374151; box-shadow: -4px 0 24px rgba(0,0,0,.45); }
+  html.dark #chat-panel.has-context { border-left-color: #10b981; }
+  html.dark #chat-header { border-bottom-color: #374151; color: #e5e7eb; }
+  html.dark #chat-model { background: #1f2937; border-color: #4b5563; color: #e5e7eb; }
+  html.dark #chat-context-count { background: #2b3140; color: #9ca3af; }
+  html.dark #chat-context-count.active { background: #064e3b; color: #6ee7b7; }
+  html.dark #btn-clear-chat { background: transparent; border-color: #4b5563; color: #9ca3af; }
+  html.dark #btn-clear-chat:hover { background: #450a0a; color: #fca5a5; border-color: #7f1d1d; }
+  html.dark .chat-msg.assistant { background: #2b3140; color: #e5e7eb; }
+  html.dark .chat-msg.error { background: #2a1215; color: #fca5a5; border-color: #7f1d1d; }
+  html.dark .chat-msg.thinking { color: #6b7280; }
+  html.dark #chat-input-area { background: #11151c; border-top-color: #374151; }
+  html.dark #chat-input { background: #1f2937; border-color: #4b5563; color: #e5e7eb; }
 </style>
+<script>
+  // Тема применяется до отрисовки страницы — чтобы не мигало белым.
+  (function () {
+    let t = localStorage.getItem('aiboard.theme');
+    if (!t) t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+    if (t === 'dark') document.documentElement.classList.add('dark');
+  })();
+  function mermaidThemeName() {
+    return document.documentElement.classList.contains('dark') ? 'dark' : 'neutral';
+  }
+  function initMermaid() {
+    if (!window.mermaid) return;
+    window.mermaid.initialize({ startOnLoad: false, theme: mermaidThemeName(), securityLevel: 'loose' });
+  }
+</script>
+<!-- Mermaid лежит локально (vendor/mermaid.min.js) — интернет не нужен. -->
+<script src="vendor/mermaid.min.js"></script>
+<script type="module">
+  // Локальный файл не подгрузился (например, доску открыли не через сервер) —
+  // пробуем CDN как запасной вариант.
+  if (!window.mermaid) {
+    try {
+      window.mermaid = (await import('https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs')).default;
+    } catch (e) {
+      console.error('Не удалось загрузить mermaid (ни локально, ни с CDN):', e);
+    }
+  }
+  initMermaid();
+</script>
 </head>
 <body>
   <div id="toolbar">
@@ -603,7 +703,13 @@
     <button id="toggleChat" title="Чат с Claude (открыть/закрыть)">💬</button>
     <button id="addNote" title="Добавить карточку">＋</button>
     <button id="zoomReset" title="Сбросить масштаб (100%)">100%</button>
-    <button id="openSettings" title="API-настройки (ключ, эндпоинт, модель)">⚙</button>
+    <button id="toggleTheme" title="Переключить тему">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path id="theme-bulb" d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1.3.5 2.6 1.5 3.5.8.8 1.3 1.5 1.5 2.5"/>
+        <path d="M9 18h6"/>
+        <path d="M10 21h4"/>
+      </svg>
+    </button>
     <button id="clearAll" title="Удалить все карточки">Очистить</button>
   </div>
 
@@ -624,30 +730,6 @@
     <div id="selection"></div>
   </div>
 
-  <div id="settings-overlay">
-    <div id="settings" role="dialog" aria-label="Настройки API">
-      <h3>Настройки Claude API</h3>
-      <label for="set-url">Endpoint (база или полный URL)</label>
-      <input id="set-url" type="text" spellcheck="false" placeholder="http://localhost:8787" />
-      <div class="hint">
-        Anthropic-совместимый эндпоинт. Если провайдер не отдаёт CORS-заголовки браузеру
-        (как Zenoid), запустите локальный прокси <code>start-proxy.bat</code> и укажите тут
-        <code>http://localhost:8787</code>. Без прокси — <code>https://api.anthropic.com</code>.
-      </div>
-      <label for="set-key">API-ключ</label>
-      <input id="set-key" type="password" spellcheck="false" placeholder="sk-ant-… или sk-zen-…" />
-      <div class="hint">Любой ключ, который понимает выбранный эндпоинт (sk-ant-, sk-zen-, и т.п.).</div>
-      <label for="set-model">Модель</label>
-      <input id="set-model" type="text" spellcheck="false" placeholder="claude-sonnet-4-5" />
-      <div class="hint">Имя модели в API. Должно быть поддержано выбранным эндпоинтом.</div>
-      <div class="row">
-        <button id="set-clear" class="danger" type="button">Очистить ключ</button>
-        <button id="set-cancel" type="button">Отмена</button>
-        <button id="set-save" class="primary" type="button">Сохранить</button>
-      </div>
-    </div>
-  </div>
-
   <div id="fmt" role="toolbar" aria-label="Форматирование">
     <button data-cmd="bold" title="Жирный (Ctrl+B)"><b>B</b></button>
     <button data-cmd="italic" title="Курсив (Ctrl+I)"><i>I</i></button>
@@ -660,17 +742,26 @@
   </div>
 
 <div id="chat-panel">
-  <div id="chat-anchor" title="Соедините карточку стрелкой сюда — она попадёт в контекст"></div>
+  <div id="chat-resizer" title="Тяните, чтобы менять ширину чата"></div>
   <div id="chat-header">
     <span class="chat-title">Чат с Claude</span>
+    <select id="chat-model" title="Модель Claude">
+      <option value="sonnet">Sonnet</option>
+      <option value="opus">Opus</option>
+      <option value="haiku">Haiku</option>
+    </select>
     <span id="chat-context-count">0 карточек</span>
     <button id="btn-clear-chat" title="Очистить историю чата">Очистить</button>
   </div>
+  <div id="chat-auth-banner" hidden>
+    <span id="chat-auth-text">Claude не подключён</span>
+    <button id="chat-auth-login" type="button">Войти</button>
+  </div>
   <div id="chat-messages"></div>
   <div id="chat-input-area">
-    <textarea id="chat-input" placeholder="Напишите сообщение… (Ctrl+Enter — отправить)" rows="3"></textarea>
-    <button id="btn-send-chat">
-      <span>Отправить</span>
+    <textarea id="chat-input" placeholder="Напишите сообщение… (Enter — отправить, Shift+Enter — перенос)" rows="3"></textarea>
+    <button id="btn-send-chat" title="Отправить (Enter)">
+      <span class="send-icon">➤</span>
       <span class="btn-spinner"></span>
     </button>
   </div>
@@ -700,7 +791,6 @@
   const CHAT_PANEL_ID    = 'CHAT_PANEL';
   const CHAT_STORAGE_KEY = 'aiboard.chat.v1';
   const chatPanel        = document.getElementById('chat-panel');
-  const chatAnchor       = document.getElementById('chat-anchor');
   const chatMessagesEl   = document.getElementById('chat-messages');
   const chatInput        = document.getElementById('chat-input');
   const btnSendChat      = document.getElementById('btn-send-chat');
@@ -712,6 +802,7 @@
   let chatMessages  = [];
   let chatPanelOpen = false;
   let chatSending   = false;
+  let hoveredNote   = null;   // id карточки под курсором — для удаления по Delete
 
   // ---------- zoom / pan ----------
   let zoom = 1, tx = 0, ty = 0;
@@ -761,7 +852,7 @@
         z: parseFloat(n.el.style.zIndex || 10),
         html: n.el.querySelector('.pane.idea').innerHTML,
         title: n.el.querySelector('.title').textContent || '',
-        algorithm: n.el.querySelector('.pane.algorithm').innerHTML,
+        algorithm: n.el.dataset.mermaidSrc || '',  // mermaid-источник диаграммы
         view: n.el.dataset.view || 'idea',
       })),
       connections: [...connections.entries()].map(([id, c]) => ({
@@ -989,7 +1080,7 @@
       </div>
       <div class="panes">
         <div class="pane idea" contenteditable="true" spellcheck="true"></div>
-        <div class="pane algorithm" contenteditable="true" spellcheck="true" hidden></div>
+        <div class="pane algorithm" hidden></div>
       </div>
       <div class="tabs">
         <button class="tab-btn algo" type="button" title="Преобразовать идею в алгоритм" aria-label="Алгоритм">
@@ -1003,6 +1094,10 @@
     `;
     world.appendChild(note);
     notes.set(noteId, { el: note });
+
+    // Карточка под курсором — чтобы удалять её клавишей Delete
+    note.addEventListener('mouseenter', () => { hoveredNote = noteId; });
+    note.addEventListener('mouseleave', () => { if (hoveredNote === noteId) hoveredNote = null; });
 
     const paneIdea = note.querySelector('.pane.idea');
     const paneAlgo = note.querySelector('.pane.algorithm');
@@ -1043,6 +1138,24 @@
       });
     });
 
+    // ---- Авто-подпись карточки через Claude ----
+    // Когда идея написана, а заголовок ещё пуст — просим модель придумать его.
+    function maybeAutoTitle() {
+      if (titleEl.textContent.trim()) return;       // заголовок уже есть
+      if (note.dataset.titling === '1') return;     // уже генерируем
+      const idea = paneIdea.innerText.trim();
+      if (idea.length < 12) return;                 // слишком мало текста
+      note.dataset.titling = '1';
+      note.classList.add('titling');
+      generateTitle(idea)
+        .then(t => {
+          if (t && !titleEl.textContent.trim()) { titleEl.textContent = t; saveAll(); }
+        })
+        .catch(() => { /* молча — авто-подпись не критична */ })
+        .finally(() => { note.dataset.titling = '0'; note.classList.remove('titling'); });
+    }
+    paneIdea.addEventListener('blur', maybeAutoTitle);
+
     // ---- Переключение вкладок ----
     function setView(name) {
       note.dataset.view = name;
@@ -1058,22 +1171,29 @@
     btnAlgo.addEventListener('mousedown', (e) => e.stopPropagation());
     btnAlgo.addEventListener('click', async (e) => {
       e.stopPropagation();
-      // На «Алгоритм» уже — возвращаемся на «Идея»
-      if (note.dataset.view === 'algorithm') { setView('idea'); saveAll(); return; }
-      // Кэш есть — просто переключаемся, без сети
-      if (paneAlgo.textContent.trim().length > 0) { setView('algorithm'); saveAll(); return; }
-      // Нужно сгенерировать
+      // На диаграмме (обычный клик) — возвращаемся к тексту идеи.
+      if (note.dataset.view === 'algorithm' && !e.shiftKey) { setView('idea'); saveAll(); return; }
+      // Есть кэш и это не Shift (принудительная регенерация) — просто показать.
+      if (!e.shiftKey && note.dataset.mermaidSrc) {
+        if (!paneAlgo.querySelector('svg')) await renderMermaidInto(paneAlgo, note.dataset.mermaidSrc);
+        setView('algorithm');
+        saveAll();
+        return;
+      }
+      // Генерация (или регенерация по Shift+клик).
       const idea = paneIdea.innerText.trim();
       if (!idea) { alert('Сначала запишите идею в этой карточке.'); return; }
       btnAlgo.classList.add('loading');
       btnAlgo.disabled = true;
       try {
-        const algo = await generateAlgorithm(idea);
-        paneAlgo.textContent = algo;
+        const src = await generateMermaid(idea);
+        note.dataset.mermaidSrc = src;
+        await renderMermaidInto(paneAlgo, src);
         setView('algorithm');
         saveAll();
+        maybeAutoTitle();
       } catch (err) {
-        alert('Не удалось получить алгоритм: ' + (err && err.message ? err.message : err));
+        alert('Не удалось получить диаграмму: ' + (err && err.message ? err.message : err));
       } finally {
         btnAlgo.classList.remove('loading');
         btnAlgo.disabled = false;
@@ -1209,13 +1329,14 @@
       }, { passive: false });
     });
 
-    // Восстановление сохранённой вкладки/алгоритма
-    if (algorithm) paneAlgo.innerHTML = algorithm;
-    if (view === 'algorithm' && paneAlgo.textContent.trim().length > 0) {
+    // Восстановление сохранённой Mermaid-диаграммы (параметр algorithm = mermaid-источник)
+    if (algorithm) note.dataset.mermaidSrc = algorithm;
+    if (view === 'algorithm' && note.dataset.mermaidSrc) {
       paneIdea.hidden = true;
       paneAlgo.hidden = false;
       note.dataset.view = 'algorithm';
       btnAlgo.classList.add('active');
+      renderMermaidInto(paneAlgo, note.dataset.mermaidSrc);
     }
 
     bringToFront(note);
@@ -1226,6 +1347,7 @@
   function removeNote(noteId) {
     const rec = notes.get(noteId);
     if (!rec) return;
+    if (hoveredNote === noteId) hoveredNote = null;
     rec.el.remove();
     notes.delete(noteId);
     // remove attached connections
@@ -1271,9 +1393,9 @@
     function move(x, y) {
       const hovered = noteAtPoint(x, y, fromId);
       document.querySelectorAll('.note.link-target').forEach(n => n.classList.remove('link-target'));
-      chatAnchor.classList.remove('link-target-anchor');
+      chatPanel.classList.remove('link-target-panel');
       if (hovered) {
-        if (hovered === chatAnchor) chatAnchor.classList.add('link-target-anchor');
+        if (hovered === chatPanel) chatPanel.classList.add('link-target-panel');
         else hovered.classList.add('link-target');
       }
       ghost.setAttribute('d', curvePath(anchorPoint(fromEl, x, y), { x, y }));
@@ -1282,9 +1404,9 @@
       ghost.remove();
       const target = noteAtPoint(x, y, fromId);
       document.querySelectorAll('.note.link-target').forEach(n => n.classList.remove('link-target'));
-      chatAnchor.classList.remove('link-target-anchor');
+      chatPanel.classList.remove('link-target-panel');
       if (target) {
-        const toId = (target === chatAnchor) ? CHAT_PANEL_ID : target.dataset.id;
+        const toId = (target === chatPanel) ? CHAT_PANEL_ID : target.dataset.id;
         if (toId && toId !== fromId) {
           const exists = [...connections.values()].some(c => c.from === fromId && c.to === toId);
           if (!exists) { createConnection(fromId, toId, ''); updateAllWires(); saveAll(); updateContextGlows(); }
@@ -1313,7 +1435,7 @@
 
   function noteAtPoint(x, y, excludeId) {
     if (chatPanelOpen && excludeId !== CHAT_PANEL_ID) {
-      if (isOnChatAnchor(x, y)) return chatAnchor;
+      if (isOnChatPanel(x, y)) return chatPanel;
     }
     // hit-test all notes (topmost wins)
     const arr = [...notes.values()].sort((a, b) =>
@@ -1328,10 +1450,6 @@
 
   // Pick a point on the border of `el` closest to (tx, ty) — gives clean docking like Blender nodes.
   function anchorPoint(el, tx, ty) {
-    if (el === chatAnchor) {
-      const r = el.getBoundingClientRect();
-      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-    }
     const r = el.getBoundingClientRect();
     const cx = r.left + r.width / 2;
     const cy = r.top + r.height / 2;
@@ -1369,6 +1487,15 @@
     path.setAttribute('marker-end', 'url(#arrow-head)');
     path.dataset.id = connId;
     wires.appendChild(path);
+
+    // Широкая невидимая дорожка поверх — большой хитбокс для клика/ПКМ/наведения
+    const hit = document.createElementNS(SVG_NS, 'path');
+    hit.setAttribute('class', 'wire-hit');
+    hit.setAttribute('fill', 'none');
+    hit.setAttribute('stroke', 'transparent');
+    hit.setAttribute('stroke-width', '24');
+    hit.dataset.id = connId;
+    wires.appendChild(hit);
 
     const labelEl = document.createElement('div');
     labelEl.className = 'wire-label';
@@ -1408,11 +1535,11 @@
       document.execCommand('insertText', false, t);
     });
 
-    path.addEventListener('click', (e) => {
+    hit.addEventListener('click', (e) => {
       e.stopPropagation();
       selectWire(connId);
     });
-    path.addEventListener('dblclick', (e) => {
+    hit.addEventListener('dblclick', (e) => {
       e.stopPropagation();
       labelEl.focus();
       // place caret at end
@@ -1420,8 +1547,19 @@
       r.selectNodeContents(labelEl); r.collapse(false);
       sel.removeAllRanges(); sel.addRange(r);
     });
+    // ПКМ по стрелке — удалить её
+    hit.addEventListener('mousedown', (e) => { if (e.button === 2) e.stopPropagation(); });
+    hit.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      removeConnection(connId);
+      saveAll();
+    });
+    // Подсветка при наведении (визуальная линия pointer-events:none, ловит hit)
+    hit.addEventListener('mouseenter', () => path.classList.add('hover'));
+    hit.addEventListener('mouseleave', () => path.classList.remove('hover'));
 
-    connections.set(connId, { from: fromId, to: toId, label, pathEl: path, labelEl });
+    connections.set(connId, { from: fromId, to: toId, label, pathEl: path, hitEl: hit, labelEl });
     return connId;
   }
 
@@ -1429,6 +1567,7 @@
     const c = connections.get(connId);
     if (!c) return;
     c.pathEl.remove();
+    if (c.hitEl) c.hitEl.remove();
     c.labelEl.remove();
     connections.delete(connId);
     updateContextGlows();
@@ -1454,10 +1593,11 @@
   function drawWire(c) {
     const fromEl = notes.get(c.from)?.el;
     const toEl = c.to === CHAT_PANEL_ID
-      ? (chatPanelOpen ? chatAnchor : null)
+      ? (chatPanelOpen ? chatPanel : null)
       : notes.get(c.to)?.el;
     if (!fromEl || !toEl) {
       if (c.pathEl) c.pathEl.setAttribute('d', '');
+      if (c.hitEl)  c.hitEl.setAttribute('d', '');
       if (c.labelEl) c.labelEl.style.display = 'none';
       return;
     }
@@ -1465,7 +1605,9 @@
     const fc = centerOf(fromEl), tc = centerOf(toEl);
     const a = anchorPoint(fromEl, tc.x, tc.y);
     const b = anchorPoint(toEl, fc.x, fc.y);
-    c.pathEl.setAttribute('d', curvePath(a, b));
+    const d = curvePath(a, b);
+    c.pathEl.setAttribute('d', d);
+    if (c.hitEl) c.hitEl.setAttribute('d', d);
     const mx = (a.x + b.x) / 2;
     const my = (a.y + b.y) / 2;
     c.labelEl.style.left = mx + 'px';
@@ -1476,17 +1618,23 @@
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
   }
 
-  // delete selected wire with Delete/Backspace (when not editing text)
+  // Delete/Backspace (когда не редактируем текст):
+  //  — выбранную стрелку,
+  //  — иначе карточку под курсором (наведи мышь + Delete).
   document.addEventListener('keydown', (e) => {
     const active = document.activeElement;
     const editingText = active && active.isContentEditable;
-    if (!editingText && (e.key === 'Delete' || e.key === 'Backspace')) {
-      const selected = document.querySelector('#wires .wire.selected');
-      if (selected) {
-        e.preventDefault();
-        removeConnection(selected.dataset.id);
-        saveAll();
-      }
+    if (editingText || (e.key !== 'Delete' && e.key !== 'Backspace')) return;
+    const selected = document.querySelector('#wires .wire.selected');
+    if (selected) {
+      e.preventDefault();
+      removeConnection(selected.dataset.id);
+      saveAll();
+      return;
+    }
+    if (e.key === 'Delete' && hoveredNote && notes.has(hoveredNote)) {
+      e.preventDefault();
+      removeNote(hoveredNote);
     }
   });
 
@@ -1549,87 +1697,87 @@
     note.querySelector('.pane.idea').focus();
   });
 
-  // ---------- Anthropic API ----------
-  const KEY_STORAGE   = 'aiboard.anthropicKey';
-  const URL_STORAGE   = 'aiboard.apiUrl';
+  // ---------- Claude (локальный мост, авторизация по подписке) ----------
   const MODEL_STORAGE = 'aiboard.apiModel';
-  const DEFAULT_URL   = 'https://api.anthropic.com';
-  const DEFAULT_MODEL = 'claude-sonnet-4-5';
-
-  // Нормализуем эндпоинт: принимаем как базу ("https://api.zenoid.space"),
-  // так и полный URL ("https://.../v1/messages").
-  function normalizeUrl(raw) {
-    let u = (raw || '').trim().replace(/\/+$/, '');
-    if (!u) u = DEFAULT_URL;
-    if (/\/messages$/i.test(u)) return u;
-    if (/\/v\d+$/i.test(u))    return u + '/messages';
-    return u + '/v1/messages';
-  }
-  function getApiUrl()   { return normalizeUrl(localStorage.getItem(URL_STORAGE) || DEFAULT_URL); }
+  const DEFAULT_MODEL = 'sonnet';
+  // Доска всегда ходит в свой же сервер (proxy.py) — он вызывает Claude Code.
+  const API_URL = '/v1/messages';
   function getApiModel() { return (localStorage.getItem(MODEL_STORAGE) || DEFAULT_MODEL).trim(); }
+  // Старые ключи/эндпоинты из прошлой схемы авторизации больше не нужны.
+  localStorage.removeItem('aiboard.anthropicKey');
+  localStorage.removeItem('aiboard.apiUrl');
 
-  // Настройки: модалка
-  const settingsOverlay = document.getElementById('settings-overlay');
-  const setUrlEl   = document.getElementById('set-url');
-  const setKeyEl   = document.getElementById('set-key');
-  const setModelEl = document.getElementById('set-model');
-  function openSettings() {
-    setUrlEl.value   = localStorage.getItem(URL_STORAGE)   || '';
-    setKeyEl.value   = localStorage.getItem(KEY_STORAGE)   || '';
-    setModelEl.value = localStorage.getItem(MODEL_STORAGE) || '';
-    setUrlEl.placeholder   = DEFAULT_URL;
-    setModelEl.placeholder = DEFAULT_MODEL;
-    settingsOverlay.classList.add('show');
-    setTimeout(() => setKeyEl.focus(), 30);
-  }
-  function closeSettings() { settingsOverlay.classList.remove('show'); }
-  document.getElementById('openSettings').addEventListener('click', openSettings);
-  document.getElementById('set-cancel').addEventListener('click', closeSettings);
-  settingsOverlay.addEventListener('click', (e) => {
-    if (e.target === settingsOverlay) closeSettings();
-  });
-  document.getElementById('set-save').addEventListener('click', () => {
-    const url = setUrlEl.value.trim();
-    const key = setKeyEl.value.trim();
-    const mdl = setModelEl.value.trim();
-    if (url) localStorage.setItem(URL_STORAGE, url);   else localStorage.removeItem(URL_STORAGE);
-    if (mdl) localStorage.setItem(MODEL_STORAGE, mdl); else localStorage.removeItem(MODEL_STORAGE);
-    if (key) localStorage.setItem(KEY_STORAGE, key);
-    closeSettings();
-  });
-  document.getElementById('set-clear').addEventListener('click', () => {
-    if (!confirm('Удалить сохранённый API-ключ?')) return;
-    localStorage.removeItem(KEY_STORAGE);
-    setKeyEl.value = '';
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && settingsOverlay.classList.contains('show')) closeSettings();
-  });
+  // ===== Авторизация: баннер «Войти» в чате (выход — `claude auth logout`) =====
+  const chatAuthBanner = document.getElementById('chat-auth-banner');
+  const chatAuthText   = document.getElementById('chat-auth-text');
+  const chatAuthLogin  = document.getElementById('chat-auth-login');
+  let authLoggedIn = null; // null — статус ещё не проверяли
 
-  function getApiKey() {
-    let key = (localStorage.getItem(KEY_STORAGE) || '').trim();
-    if (key) return key;
-    // Простой запрос ключа, если ничего не настроено
-    key = (prompt('Введите API-ключ для ' + getApiUrl() + '\n\nКлюч сохранится в этом браузере. Расширенные настройки — кнопка ⚙ в верхней панели.') || '').trim();
-    if (!key) throw new Error('Нужен API-ключ');
-    localStorage.setItem(KEY_STORAGE, key);
-    return key;
+  function renderAuth() {
+    chatAuthBanner.hidden = authLoggedIn !== false;
   }
 
-  async function generateAlgorithm(idea) {
-    const key = getApiKey();
-    const url = getApiUrl();
+  async function checkAuth() {
+    try {
+      const r = await fetch('/auth/status');
+      authLoggedIn = !!(await r.json()).loggedIn;
+    } catch (_) {
+      authLoggedIn = false;
+    }
+    renderAuth();
+    return authLoggedIn;
+  }
+
+  let authPollTimer = null;
+  function pollAuthUntilLoggedIn() {
+    if (authPollTimer) return;
+    let tries = 0;
+    chatAuthText.textContent = 'Завершите вход в открывшемся окне браузера…';
+    authPollTimer = setInterval(async () => {
+      tries++;
+      const ok = await checkAuth();
+      if (ok || tries > 100) {
+        clearInterval(authPollTimer);
+        authPollTimer = null;
+        if (ok) {
+          chatAuthText.textContent = 'Claude не подключён';
+          appendChatMessage('assistant', 'Готово — вход выполнен, можно общаться!');
+        } else {
+          chatAuthText.textContent = 'Вход не завершён — попробуйте ещё раз';
+        }
+      }
+    }, 3000);
+  }
+
+  async function startLogin() {
+    chatAuthLogin.disabled = true;
+    try {
+      const r = await fetch('/auth/login', { method: 'POST' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      pollAuthUntilLoggedIn();
+    } catch (e) {
+      alert('Не удалось запустить вход: ' + e.message + '\nПроверьте, что доска запущена через start-proxy.bat.');
+    } finally {
+      setTimeout(() => { chatAuthLogin.disabled = false; }, 3000);
+    }
+  }
+
+  chatAuthLogin.addEventListener('click', startLogin);
+  checkAuth();
+
+  // Просим у модели код Mermaid-диаграммы по тексту идеи.
+  async function generateMermaid(idea) {
     const model = getApiModel();
-    const userPrompt = 'Преобразуй идею в чёткий пошаговый алгоритм на русском. Верни только пронумерованные шаги (1. … 2. …), коротко и по делу, без вступлений и заключений.\n\nИдея:\n"""\n' + idea + '\n"""';
+    const userPrompt =
+      'Преобразуй идею в наглядную диаграмму Mermaid (синтаксис flowchart). ' +
+      'Верни ТОЛЬКО валидный код Mermaid — без markdown-заборов ```, без пояснений. ' +
+      'Подписи узлов — на русском, короткие. Начни со строки "flowchart TD".\n\n' +
+      'Идея:\n"""\n' + idea + '\n"""';
     let res;
     try {
-      res = await fetch(url, {
+      res = await fetch(API_URL, {
         method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-api-key': key,
-          'anthropic-version': '2023-06-01',
-        },
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           model,
           max_tokens: 1024,
@@ -1637,16 +1785,16 @@
         }),
       });
     } catch (e) {
-      // fetch() бросает TypeError на CORS-блок без подробностей. Подскажем где смотреть.
+      // fetch() бросает TypeError без подробностей. Подскажем где смотреть.
       throw new Error(
         'Запрос не дошёл (' + e.name + ': ' + e.message + ').\n\n' +
-        'Скорее всего CORS: эндпоинт не пускает браузерные запросы. Откройте F12 → Network → preflight OPTIONS.\n' +
-        'Изолировать причину можно в test-api.html (рядом с этим файлом).'
+        'Проверьте, что доска запущена через start-proxy.bat — локальный сервер на http://localhost:8787 должен работать.'
       );
     }
-    if (res.status === 401 || res.status === 403) {
-      localStorage.removeItem(KEY_STORAGE);
-      throw new Error('Ключ неверный — введите заново (⚙)');
+    if (res.status === 401) {
+      authLoggedIn = false;
+      renderAuth();
+      throw new Error('Claude не подключён — нажмите «Войти» вверху чата.');
     }
     if (!res.ok) {
       let detail = '';
@@ -1657,7 +1805,56 @@
     const block = (data.content || []).find(b => b.type === 'text');
     const txt = block?.text || data.choices?.[0]?.message?.content; // на случай OpenAI-совместимого прокси
     if (!txt) throw new Error('Пустой ответ модели');
-    return String(txt).trim();
+    // Срезаем возможные ```mermaid / ``` обёртки.
+    return String(txt).trim()
+      .replace(/^```(?:mermaid)?\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
+  }
+
+  // Ждём подгрузки mermaid (module-скрипт в <head>) и рендерим SVG в панель.
+  let mermaidSeq = 0;
+  async function getMermaid() {
+    for (let i = 0; i < 50 && !window.mermaid; i++) {
+      await new Promise(r => setTimeout(r, 100));
+    }
+    if (!window.mermaid) throw new Error('mermaid не загрузился (нет интернета?)');
+    return window.mermaid;
+  }
+  async function renderMermaidInto(paneEl, src) {
+    paneEl.classList.remove('diagram-error');
+    try {
+      const mermaid = await getMermaid();
+      const { svg } = await mermaid.render('mmd-' + (++mermaidSeq), src);
+      paneEl.innerHTML = svg;
+    } catch (err) {
+      paneEl.classList.add('diagram-error');
+      paneEl.textContent =
+        'Ошибка отрисовки диаграммы:\n' + (err && err.message ? err.message : err) +
+        '\n\nShift+▶ — перегенерировать.';
+    }
+  }
+
+  // Короткий заголовок карточки по тексту идеи (для авто-подписи).
+  async function generateTitle(idea) {
+    const model = getApiModel();
+    const userPrompt = 'Придумай очень короткий заголовок (2–5 слов) для этой идеи на русском. ' +
+      'Без кавычек, без точки в конце, только сам заголовок.\n\nИдея:\n"""\n' + idea + '\n"""';
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        max_tokens: 60,
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const block = (data.content || []).find(b => b.type === 'text');
+    const txt = block?.text || data.choices?.[0]?.message?.content;
+    if (!txt) throw new Error('Пустой ответ модели');
+    return String(txt).trim().replace(/^["'«»\s]+|["'«».\s]+$/g, '').slice(0, 80);
   }
 
   // clear-all
@@ -1684,11 +1881,10 @@
 
   // ===== Chat panel =====
 
-  function isOnChatAnchor(x, y) {
-    const r = chatAnchor.getBoundingClientRect();
-    const cx = r.left + r.width / 2;
-    const cy = r.top + r.height / 2;
-    return Math.hypot(x - cx, y - cy) <= 28;
+  function isOnChatPanel(x, y) {
+    if (!chatPanelOpen) return false;
+    const r = chatPanel.getBoundingClientRect();
+    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
   }
 
   function getContextNoteIds() {
@@ -1709,7 +1905,7 @@
   function updateContextGlows() {
     const ctx = getContextNoteIds();
     notes.forEach(({ el }, id) => el.classList.toggle('in-context', ctx.has(id)));
-    chatAnchor.classList.toggle('has-context', ctx.size > 0);
+    chatPanel.classList.toggle('has-context', ctx.size > 0);
     chatContextCount.textContent = ctx.size ? `${ctx.size} карт.` : '0 карточек';
     chatContextCount.classList.toggle('active', ctx.size > 0);
   }
@@ -1768,30 +1964,41 @@
     const ctx = getContextNoteIds();
     if (!ctx.size) return 'Ты — ИИ-ассистент на доске идей. Помогай пользователю.';
     const parts = ['Ты — ИИ-ассистент на доске идей. Ниже — содержимое карточек, добавленных в контекст:\n'];
+    const titleOf = (id) => notes.get(id)?.el.querySelector('.title')?.textContent?.trim() || '(без названия)';
     ctx.forEach(id => {
       const rec = notes.get(id);
       if (!rec) return;
-      const title = rec.el.querySelector('.title')?.textContent?.trim() || '(без названия)';
       const idea  = rec.el.querySelector('.pane.idea')?.innerText?.trim() || '';
-      parts.push(`### ${title}\n${idea}`);
+      parts.push(`### ${titleOf(id)}\n${idea}`);
     });
-    parts.push('\nОтвечай по-русски, по делу. Можешь предложить создать новую карточку инструментом create_card.');
+    // Подписи на стрелках между карточками контекста (и стрелках к самому чату).
+    const links = [];
+    connections.forEach(c => {
+      const label = (c.label || '').trim();
+      if (!label) return;
+      if (c.from === CHAT_PANEL_ID || !ctx.has(c.from)) return;
+      if (c.to === CHAT_PANEL_ID) {
+        links.push(`«${titleOf(c.from)}» → чат: ${label}`);
+      } else if (ctx.has(c.to)) {
+        links.push(`«${titleOf(c.from)}» → «${titleOf(c.to)}»: ${label}`);
+      }
+    });
+    if (links.length) {
+      parts.push('### Связи (подписи стрелок)\n' + links.join('\n'));
+    }
+    parts.push('\nОтвечай по-русски, по делу. Учитывай связи между карточками. Можешь предложить создать новую карточку инструментом create_card.');
     return parts.join('\n\n');
   }
 
   async function callClaudeChat(messages) {
-    const key = getApiKey();
-    const url = getApiUrl();
     const model = getApiModel();
+    const t0 = performance.now();
+    console.debug('[chat] ->', model, messages.length + ' сообщ.');
     let res;
     try {
-      res = await fetch(url, {
+      res = await fetch(API_URL, {
         method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-api-key': key,
-          'anthropic-version': '2023-06-01',
-        },
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           model,
           max_tokens: 2048,
@@ -1812,11 +2019,14 @@
         }),
       });
     } catch (e) {
-      throw new Error('Запрос не дошёл (' + e.message + ')');
+      console.debug('[chat] сеть упала за', Math.round(performance.now() - t0) + 'мс:', e.message);
+      throw new Error('Запрос не дошёл (' + e.message + '). Проверьте, что запущен start-proxy.bat.');
     }
-    if (res.status === 401 || res.status === 403) {
-      localStorage.removeItem(KEY_STORAGE);
-      throw new Error('Ключ неверный — введите заново (⚙)');
+    console.debug('[chat] <-', res.status, Math.round(performance.now() - t0) + 'мс');
+    if (res.status === 401) {
+      authLoggedIn = false;
+      renderAuth();
+      throw new Error('Claude не подключён — нажмите «Войти» вверху чата.');
     }
     if (!res.ok) {
       let detail = '';
@@ -1926,11 +2136,94 @@
   toggleChatBtn.addEventListener('click', toggleChatPanel);
   btnSendChat.addEventListener('click', sendChatMessage);
   chatInput.addEventListener('keydown', e => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); sendChatMessage(); }
+    // Enter — отправить, Shift+Enter — перенос строки
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); }
   });
   btnClearChat.addEventListener('click', clearChat);
   chatPanel.addEventListener('mousedown', e => e.stopPropagation());
   chatPanel.addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
+
+  // ===== Desktop: чат-панель закреплена и тянется по горизонтали =====
+  const chatResizer    = document.getElementById('chat-resizer');
+  const CHAT_WIDTH_KEY = 'aiboard.chatWidth';
+  const isDesktop      = window.matchMedia('(min-width: 601px)').matches;
+
+  function applyChatWidth(w) {
+    w = Math.max(280, Math.min(window.innerWidth * 0.7, w));
+    document.documentElement.style.setProperty('--chat-width', w + 'px');
+    updateAllWires();
+  }
+  const savedChatW = parseFloat(localStorage.getItem(CHAT_WIDTH_KEY));
+  if (savedChatW) applyChatWidth(savedChatW);
+
+  chatResizer.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startW = chatPanel.getBoundingClientRect().width;
+    document.body.style.userSelect = 'none';
+    const onMove = (ev) => applyChatWidth(startW + (startX - ev.clientX));
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      document.body.style.userSelect = '';
+      localStorage.setItem(CHAT_WIDTH_KEY, String(Math.round(chatPanel.getBoundingClientRect().width)));
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  });
+
+  // На ПК панель открыта постоянно (кнопка-переключатель скрыта через CSS).
+  if (isDesktop) {
+    chatPanelOpen = true;
+    chatPanel.classList.add('open');
+    toggleChatBtn.classList.add('active');
+  }
+
+  // ===== Выбор модели Claude (шапка чата; тот же сторедж, что и в ⚙) =====
+  const chatModelEl = document.getElementById('chat-model');
+  function syncChatModel() {
+    const m = getApiModel();
+    if (![...chatModelEl.options].some(o => o.value === m)) {
+      // Нестандартное имя модели из настроек — показываем как есть.
+      const o = document.createElement('option');
+      o.value = m; o.textContent = m;
+      chatModelEl.appendChild(o);
+    }
+    chatModelEl.value = m;
+  }
+  chatModelEl.addEventListener('change', () => {
+    localStorage.setItem(MODEL_STORAGE, chatModelEl.value);
+    console.debug('[board] модель:', chatModelEl.value);
+  });
+  syncChatModel();
+
+  // ===== Тема: светлая/тёмная =====
+  const THEME_KEY = 'aiboard.theme';
+  const themeBtn  = document.getElementById('toggleTheme');
+  function refreshThemeBtn() {
+    const dark = document.documentElement.classList.contains('dark');
+    themeBtn.title = dark ? 'Включить свет (светлая тема)' : 'Погасить свет (тёмная тема)';
+  }
+  // После смены темы перерисовываем уже отрендеренные диаграммы в новой палитре.
+  async function rerenderDiagrams() {
+    if (!window.mermaid) return;
+    initMermaid();
+    for (const { el } of notes.values()) {
+      const src  = el.dataset.mermaidSrc;
+      const pane = el.querySelector('.pane.algorithm');
+      if (src && pane && pane.querySelector('svg')) {
+        try { await renderMermaidInto(pane, src); } catch (_) {}
+      }
+    }
+  }
+  themeBtn.addEventListener('click', () => {
+    const dark = document.documentElement.classList.toggle('dark');
+    localStorage.setItem(THEME_KEY, dark ? 'dark' : 'light');
+    refreshThemeBtn();
+    rerenderDiagrams();
+  });
+  refreshThemeBtn();
 
   loadAll();
   loadChatMessages();
