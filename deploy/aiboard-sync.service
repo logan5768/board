@@ -1,8 +1,0 @@
-[Unit]
-Description=aiboard one-shot sync from GitHub
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-ExecStart=/bin/bash /srv/aiboard/deploy/aiboard-sync.sh
