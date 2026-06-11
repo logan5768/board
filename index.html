@@ -222,10 +222,15 @@
     content: "Запишите идею…";
     color: #9ca3af; pointer-events: none;
   }
-  /* Режим схемы: компактное превью — всегда вписано, клик открывает просмотрщик */
+  /* Режим схемы: компактное превью — всегда вписано, клик открывает просмотрщик.
+     display:flex только для НЕскрытой панели, иначе оно перебивает
+     [hidden]{display:none} (одинаковая специфичность) и пустая панель
+     висит справа, ужимая текст идеи. */
+  .note .pane.algorithm:not([hidden]) {
+    display: flex;
+  }
   .note .pane.algorithm {
     cursor: zoom-in;
-    display: flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
