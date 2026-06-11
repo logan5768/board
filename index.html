@@ -222,27 +222,62 @@
     content: "Запишите идею…";
     color: #9ca3af; pointer-events: none;
   }
+  /* Режим схемы: компактное превью — всегда вписано, клик открывает просмотрщик */
   .note .pane.algorithm {
-    cursor: default;
-    display: block;
+    cursor: zoom-in;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+    padding: 6px;
   }
-  .note .pane.algorithm svg { max-width: 100%; height: auto; display: block; }
+  .note .pane.algorithm svg { display: block; transform-origin: center center; }
+  /* Бейдж «развернуть» в углу превью */
+  .note .pane.algorithm .expand-badge {
+    position: absolute; top: 6px; right: 6px;
+    width: 22px; height: 22px;
+    display: grid; place-items: center;
+    background: rgba(255,255,255,.9);
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    color: #374151;
+    pointer-events: none;
+  }
+  .note .pane.algorithm .expand-badge svg { width: 13px; height: 13px; }
+  /* Если схема не влезла даже на минимальном читаемом масштабе — намёк снизу */
+  .note .pane.algorithm.cropped::after {
+    content: "целиком — разверните";
+    position: absolute; left: 0; right: 0; bottom: 0;
+    text-align: center;
+    font-size: 11px;
+    color: #6b7280;
+    background: linear-gradient(to top, var(--note-bg), transparent);
+    padding: 10px 0 3px;
+    pointer-events: none;
+  }
   .note .pane.algorithm.diagram-error {
     font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
     font-size: 12.5px;
     color: #b91c1b;
     white-space: pre-wrap;
+    cursor: default;
+    align-items: flex-start; justify-content: flex-start;
+  }
+  .note .pane.algorithm:empty {
+    cursor: default;
   }
   .note .pane.algorithm:empty::before {
-    content: "Нажмите ▶ — сгенерируется Mermaid-диаграмма";
-    color: #9ca3af; pointer-events: none;
+    content: "Нажмите «схема» — сгенерируется диаграмма";
+    color: #9ca3af; pointer-events: none; font-size: 13px;
   }
 
-  /* Нижняя полоска вкладок-кнопок */
+  /* Нижняя полоска: тумблер «текст / схема» + кнопки режима схемы */
   .note .tabs {
     flex: 0 0 auto;
     display: flex;
-    gap: 4px;
+    align-items: center;
+    gap: 6px;
     padding: 4px 6px;
     background: #f9fafb;
     border-top: 1px solid #e5e7eb;
@@ -250,36 +285,47 @@
     border-bottom-right-radius: 9px;
     user-select: none;
   }
-  .note .tab-btn {
-    width: 24px; height: 22px;
-    display: grid; place-items: center;
+  .note .seg {
+    display: flex;
     border: 1px solid #d1d5db;
-    background: #ffffff;
-    color: #374151;
-    border-radius: 5px;
-    cursor: pointer;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .note .seg-btn {
+    border: 0; background: #fff; color: #6b7280;
     font-size: 11px; line-height: 1;
-    padding: 0;
-    transition: background .12s ease, color .12s ease, border-color .12s ease;
+    padding: 4px 10px;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 5px;
   }
-  .note .tab-btn:hover { background: #f3f4f6; }
-  .note .tab-btn.active {
-    background: #f97316;
-    color: #ffffff;
-    border-color: #ea580c;
-    box-shadow: 0 0 0 2px rgba(249,115,22,.22);
-  }
-  .note .tab-btn[disabled] { cursor: progress; opacity: .85; }
-  .note .tab-btn.loading .icon { display: none; }
-  .note .tab-btn .spinner {
+  .note .seg-btn + .seg-btn { border-left: 1px solid #d1d5db; }
+  .note .seg-btn:hover { background: #f3f4f6; }
+  .note .seg-btn.active { background: var(--accent); color: #fff; }
+  .note .seg-btn[disabled] { cursor: progress; }
+  .note .seg-btn .spinner {
     display: none;
-    width: 12px; height: 12px;
-    border: 2px solid #d1d5db;
-    border-top-color: #6b7280;
+    width: 11px; height: 11px;
+    border: 2px solid rgba(255,255,255,.45);
+    border-top-color: #fff;
     border-radius: 50%;
     animation: aiboard-spin .8s linear infinite;
   }
-  .note .tab-btn.loading .spinner { display: inline-block; }
+  .note .seg-btn.loading .lbl { display: none; }
+  .note .seg-btn.loading .spinner { display: inline-block; }
+  .note .tabs-gap { flex: 1; }
+  .note .icon-btn {
+    width: 24px; height: 22px;
+    display: grid; place-items: center;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    color: #374151;
+    border-radius: 6px;
+    cursor: pointer;
+    padding: 0;
+  }
+  .note .icon-btn:hover { background: #f3f4f6; }
+  .note .icon-btn[hidden] { display: none; }
+  .note .icon-btn svg { width: 13px; height: 13px; display: block; }
   @keyframes aiboard-spin { to { transform: rotate(360deg); } }
 
   /* resize handles — широкая невидимая область, удобно хватать */
@@ -590,6 +636,66 @@
   #confirm-actions button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
   #confirm-actions button.primary:hover { background: #1d4ed8; }
 
+  /* ===== Просмотрщик диаграммы во весь экран (зум/панорама как в Blueprints) ===== */
+  #diagram-viewer {
+    position: fixed; inset: 0;
+    background: rgba(17,20,28,.96);
+    display: none;
+    flex-direction: column;
+    z-index: 4000;
+  }
+  #diagram-viewer.show { display: flex; }
+  #dv-bar {
+    flex: 0 0 auto;
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px;
+    color: #e5e7eb;
+    font-size: 13px;
+  }
+  #dv-title { font-weight: 600; max-width: 40vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #dv-bar .dv-gap { flex: 1; }
+  #dv-bar button {
+    border: 1px solid #5f5e5a;
+    background: transparent;
+    color: #d3d1c7;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 5px 11px;
+    line-height: 1;
+  }
+  #dv-bar button:hover { background: rgba(255,255,255,.08); }
+  #dv-bar button.dv-icon { width: 30px; height: 28px; padding: 0; display: grid; place-items: center; }
+  #dv-bar button.dv-icon svg { width: 15px; height: 15px; display: block; }
+  #dv-bar button.done { border-color: #10b981; color: #6ee7b7; }
+  #dv-regen.spinning svg { animation: aiboard-spin .8s linear infinite; }
+  #dv-stage {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    cursor: grab;
+    touch-action: none;
+  }
+  #dv-stage.grabbing { cursor: grabbing; }
+  #dv-canvas {
+    position: absolute; left: 0; top: 0;
+    transform-origin: 0 0;
+    will-change: transform;
+  }
+  #dv-canvas svg { display: block; }
+  #dv-canvas.diagram-error {
+    color: #fca5a5; padding: 20px;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 13px; white-space: pre-wrap;
+  }
+  #dv-hint {
+    flex: 0 0 auto;
+    text-align: center;
+    color: #6b7280;
+    font-size: 11px;
+    padding: 6px 0 10px;
+  }
+
   /* ---- Desktop: chat panel always docked & resizable ---- */
   #chat-resizer {
     position: absolute;
@@ -629,7 +735,8 @@
     .note .bar { height: 36px; flex: 0 0 36px; }
     .note .del { width: 24px; height: 24px; font-size: 16px; }
     .note .link { width: 24px; height: 24px; font-size: 14px; }
-    .note .tab-btn { width: 32px; height: 28px; font-size: 13px; }
+    .note .seg-btn { padding: 6px 12px; font-size: 13px; }
+    .note .icon-btn { width: 30px; height: 28px; }
     .note { min-width: 120px; min-height: 80px; }
     .handle.e, .handle.w { width: 24px; }
     .handle.n, .handle.s { height: 24px; }
@@ -665,8 +772,15 @@
   html.dark .note .pane { color: #e5e7eb; }
   html.dark .note .pane.algorithm.diagram-error { color: #fca5a5; }
   html.dark .note .tabs { background: #181c24; border-top-color: #374151; }
-  html.dark .note .tab-btn { background: #1f2937; color: #d1d5db; border-color: #4b5563; }
-  html.dark .note .tab-btn:hover { background: #374151; }
+  html.dark .note .seg { border-color: #4b5563; }
+  html.dark .note .seg-btn { background: #1f2937; color: #9ca3af; }
+  html.dark .note .seg-btn + .seg-btn { border-left-color: #4b5563; }
+  html.dark .note .seg-btn:hover { background: #374151; }
+  html.dark .note .seg-btn.active { background: var(--accent); color: #fff; }
+  html.dark .note .icon-btn { background: #1f2937; color: #d1d5db; border-color: #4b5563; }
+  html.dark .note .icon-btn:hover { background: #374151; }
+  html.dark .note .pane.algorithm .expand-badge { background: rgba(31,41,55,.92); border-color: #4b5563; color: #d1d5db; }
+  html.dark .note .pane.algorithm.cropped::after { color: #9ca3af; }
   html.dark #toolbar { background: #1b1f27; border-color: #374151; box-shadow: 0 4px 16px rgba(0,0,0,.45); color: #e5e7eb; }
   html.dark #toolbar .hint { color: #9ca3af; }
   html.dark #toolbar button { background: #2b3140; color: #e5e7eb; }
@@ -810,6 +924,26 @@
     <button id="confirm-cancel">Отмена</button>
     <button id="confirm-ok" class="primary">Создать</button>
   </div>
+</div>
+
+<div id="diagram-viewer">
+  <div id="dv-bar">
+    <span id="dv-title"></span>
+    <span class="dv-gap"></span>
+    <button id="dv-fit" type="button">Вписать</button>
+    <button id="dv-100" type="button">100%</button>
+    <button id="dv-regen" class="dv-icon" type="button" title="Перегенерировать схему" aria-label="Перегенерировать">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg>
+    </button>
+    <button id="dv-copy" class="dv-icon" type="button" title="Копировать код Mermaid" aria-label="Копировать код">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+    </button>
+    <button id="dv-close" class="dv-icon" type="button" title="Закрыть (Esc)" aria-label="Закрыть">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <div id="dv-stage"><div id="dv-canvas"></div></div>
+  <div id="dv-hint">колесо — зум к курсору · перетаскивание — двигать · двойной клик — вписать · Esc — закрыть</div>
 </div>
 
 <script>
@@ -1118,8 +1252,18 @@
         <div class="pane algorithm" hidden></div>
       </div>
       <div class="tabs">
-        <button class="tab-btn algo" type="button" title="Преобразовать идею в алгоритм" aria-label="Алгоритм">
-          <span class="icon">▶</span><span class="spinner"></span>
+        <div class="seg">
+          <button class="seg-btn vt-text active" type="button" data-view="idea">текст</button>
+          <button class="seg-btn vt-diagram" type="button" data-view="algorithm" title="Построить / показать схему">
+            <span class="lbl">схема</span><span class="spinner"></span>
+          </button>
+        </div>
+        <span class="tabs-gap"></span>
+        <button class="icon-btn btn-regen" type="button" title="Перегенерировать схему" aria-label="Перегенерировать" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg>
+        </button>
+        <button class="icon-btn btn-expand" type="button" title="Открыть во весь экран" aria-label="Развернуть" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>
         </button>
       </div>
       <div class="handle n"></div><div class="handle s"></div>
@@ -1134,9 +1278,15 @@
     note.addEventListener('mouseenter', () => { hoveredNote = noteId; });
     note.addEventListener('mouseleave', () => { if (hoveredNote === noteId) hoveredNote = null; });
 
-    const paneIdea = note.querySelector('.pane.idea');
-    const paneAlgo = note.querySelector('.pane.algorithm');
-    const btnAlgo  = note.querySelector('.tab-btn.algo');
+    const paneIdea  = note.querySelector('.pane.idea');
+    const paneAlgo  = note.querySelector('.pane.algorithm');
+    const vtText    = note.querySelector('.vt-text');
+    const vtDiagram = note.querySelector('.vt-diagram');
+    const btnRegen  = note.querySelector('.btn-regen');
+    const btnExpand = note.querySelector('.btn-expand');
+    // Превью схемы само вписывается при любом изменении размера панели
+    // (ресайз карточки, показ/скрытие, окно). Безопасно при пустой панели.
+    new ResizeObserver(() => { if (!paneAlgo.hidden) fitPreview(paneAlgo); }).observe(paneAlgo);
     if (html) paneIdea.innerHTML = html;
     const titleEl = note.querySelector('.title');
     if (title) titleEl.textContent = title;
@@ -1191,35 +1341,33 @@
     }
     paneIdea.addEventListener('blur', maybeAutoTitle);
 
-    // ---- Переключение вкладок ----
+    // ---- Тумблер «текст / схема» ----
     function setView(name) {
       note.dataset.view = name;
       paneIdea.hidden = (name !== 'idea');
       paneAlgo.hidden = (name !== 'algorithm');
-      btnAlgo.classList.toggle('active', name === 'algorithm');
-      // фокус на видимой панели, но без перетаскивания скролла
-      const target = name === 'algorithm' ? paneAlgo : paneIdea;
-      // только если уже был фокус внутри карточки
-      if (note.contains(document.activeElement)) target.focus();
+      vtText.classList.toggle('active', name === 'idea');
+      vtDiagram.classList.toggle('active', name === 'algorithm');
+      btnRegen.hidden  = (name !== 'algorithm');
+      btnExpand.hidden = (name !== 'algorithm');
+      if (name === 'algorithm') fitPreview(paneAlgo);
+      // фокус на текстовой панели, только если он уже был внутри карточки
+      if (name === 'idea' && note.contains(document.activeElement)) paneIdea.focus();
       updateWiresFor(noteId);
     }
-    btnAlgo.addEventListener('mousedown', (e) => e.stopPropagation());
-    btnAlgo.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      // На диаграмме (обычный клик) — возвращаемся к тексту идеи.
-      if (note.dataset.view === 'algorithm' && !e.shiftKey) { setView('idea'); saveAll(); return; }
-      // Есть кэш и это не Shift (принудительная регенерация) — просто показать.
-      if (!e.shiftKey && note.dataset.mermaidSrc) {
+
+    // Построить (или показать кэш) схему. force=true — перегенерировать.
+    async function ensureDiagram(force) {
+      if (!force && note.dataset.mermaidSrc) {
         if (!paneAlgo.querySelector('svg')) await renderMermaidInto(paneAlgo, note.dataset.mermaidSrc);
         setView('algorithm');
         saveAll();
         return;
       }
-      // Генерация (или регенерация по Shift+клик).
       const idea = paneIdea.innerText.trim();
       if (!idea) { alert('Сначала запишите идею в этой карточке.'); return; }
-      btnAlgo.classList.add('loading');
-      btnAlgo.disabled = true;
+      vtDiagram.classList.add('loading');
+      vtDiagram.disabled = true;
       try {
         const src = await generateMermaid(idea);
         note.dataset.mermaidSrc = src;
@@ -1230,9 +1378,22 @@
       } catch (err) {
         alert('Не удалось получить диаграмму: ' + (err && err.message ? err.message : err));
       } finally {
-        btnAlgo.classList.remove('loading');
-        btnAlgo.disabled = false;
+        vtDiagram.classList.remove('loading');
+        vtDiagram.disabled = false;
       }
+    }
+
+    [vtText, vtDiagram, btnRegen, btnExpand].forEach(b => b.addEventListener('mousedown', e => e.stopPropagation()));
+    vtText.addEventListener('click', (e) => { e.stopPropagation(); setView('idea'); saveAll(); });
+    vtDiagram.addEventListener('click', (e) => { e.stopPropagation(); ensureDiagram(false); });
+    btnRegen.addEventListener('click', (e) => { e.stopPropagation(); ensureDiagram(true); });
+    btnExpand.addEventListener('click', (e) => { e.stopPropagation(); openDiagramViewer(noteId); });
+    // Клик по самому превью — открыть просмотрщик
+    paneAlgo.addEventListener('click', (e) => {
+      if (paneAlgo.classList.contains('diagram-error')) return;
+      if (!note.dataset.mermaidSrc) return;
+      e.stopPropagation();
+      openDiagramViewer(noteId);
     });
 
     // drag move from header
@@ -1367,10 +1528,7 @@
     // Восстановление сохранённой Mermaid-диаграммы (параметр algorithm = mermaid-источник)
     if (algorithm) note.dataset.mermaidSrc = algorithm;
     if (view === 'algorithm' && note.dataset.mermaidSrc) {
-      paneIdea.hidden = true;
-      paneAlgo.hidden = false;
-      note.dataset.view = 'algorithm';
-      btnAlgo.classList.add('active');
+      setView('algorithm');
       renderMermaidInto(paneAlgo, note.dataset.mermaidSrc);
     }
 
@@ -1801,12 +1959,24 @@
   checkAuth();
 
   // Просим у модели код Mermaid-диаграммы по тексту идеи.
+  // Промпт жёстко держит схему узкой и читаемой: ориентация сверху-вниз,
+  // мало узлов, родственные пункты — списком внутри одного узла (а не веером).
   async function generateMermaid(idea) {
     const model = getApiModel();
     const userPrompt =
-      'Преобразуй идею в наглядную диаграмму Mermaid (синтаксис flowchart). ' +
-      'Верни ТОЛЬКО валидный код Mermaid — без markdown-заборов ```, без пояснений. ' +
-      'Подписи узлов — на русском, короткие. Начни со строки "flowchart TD".\n\n' +
+      'Преобразуй идею в наглядную диаграмму Mermaid. ' +
+      'Верни ТОЛЬКО валидный код Mermaid — без markdown-заборов ``` и без пояснений.\n\n' +
+      'Правила компоновки (соблюдай строго, иначе схема станет нечитаемой):\n' +
+      '1. Ориентация сверху вниз — первая строка "flowchart TD". ' +
+      '(Исключения: если идея — это диалог/последовательность во времени, используй "sequenceDiagram"; ' +
+      'если это набор состояний/статусов — "stateDiagram-v2". В остальных случаях — flowchart TD.)\n' +
+      '2. Не больше 6 узлов. Родственные пункты НЕ раскидывай по отдельным узлам, ' +
+      'а объединяй в ОДИН узел списком: переносы строк через <br/>, каждый пункт с «• ». ' +
+      'Пример: A["Питание<br/>• дефицит 500 ккал<br/>• белок 1.6 г/кг<br/>• вода 2 л"].\n' +
+      '3. Никакого «веера»: из одного узла выходит максимум 2–3 стрелки. ' +
+      'Длинные перечисления делай вертикальной цепочкой A --> B --> C, а не параллельно вширь.\n' +
+      '4. Этапы и фазы оборачивай в subgraph — они укладываются вертикально.\n' +
+      '5. Подписи короткие, на русском. Текст узлов всегда в двойных кавычках "...".\n\n' +
       'Идея:\n"""\n' + idea + '\n"""';
     let res;
     try {
@@ -1815,7 +1985,7 @@
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           model,
-          max_tokens: 1024,
+          max_tokens: 1500,
           messages: [{ role: 'user', content: userPrompt }],
         }),
       });
@@ -1856,19 +2026,172 @@
     if (!window.mermaid) throw new Error('mermaid не загрузился (нет интернета?)');
     return window.mermaid;
   }
+  // Натуральный размер SVG-диаграммы (из viewBox, иначе из bbox).
+  function svgNaturalSize(svg) {
+    const vb = svg.viewBox && svg.viewBox.baseVal;
+    if (vb && vb.width && vb.height) return { w: vb.width, h: vb.height };
+    try { const b = svg.getBBox(); if (b.width && b.height) return { w: b.width, h: b.height }; } catch (_) {}
+    return { w: svg.clientWidth || 0, h: svg.clientHeight || 0 };
+  }
+
+  // Минимальный читаемый масштаб превью: ниже не ужимаем — лучше показать
+  // фрагмент с намёком «разверните», чем нечитаемую мелочь.
+  const PREVIEW_MIN_SCALE = 0.62;
+  function fitPreview(paneEl) {
+    const svg = paneEl.querySelector('svg');
+    if (!svg) { paneEl.classList.remove('cropped'); return; }
+    const { w: nw, h: nh } = svgNaturalSize(svg);
+    const cw = paneEl.clientWidth, ch = paneEl.clientHeight;
+    if (!nw || !nh || !cw || !ch) return;
+    svg.style.maxWidth = 'none';
+    svg.style.width  = nw + 'px';
+    svg.style.height = nh + 'px';
+    const fit = Math.min(cw / nw, ch / nh);
+    const scale = Math.min(1, Math.max(fit, PREVIEW_MIN_SCALE));
+    svg.style.transform = 'scale(' + scale + ')';
+    paneEl.classList.toggle('cropped', fit < PREVIEW_MIN_SCALE - 0.005);
+  }
+
   async function renderMermaidInto(paneEl, src) {
-    paneEl.classList.remove('diagram-error');
+    paneEl.classList.remove('diagram-error', 'cropped');
     try {
       const mermaid = await getMermaid();
       const { svg } = await mermaid.render('mmd-' + (++mermaidSeq), src);
-      paneEl.innerHTML = svg;
+      paneEl.innerHTML = svg
+        + '<span class="expand-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg></span>';
+      fitPreview(paneEl);
     } catch (err) {
       paneEl.classList.add('diagram-error');
       paneEl.textContent =
         'Ошибка отрисовки диаграммы:\n' + (err && err.message ? err.message : err) +
-        '\n\nShift+▶ — перегенерировать.';
+        '\n\n↻ — перегенерировать.';
     }
   }
+
+  // ===== Просмотрщик диаграммы во весь экран (зум к курсору + панорама) =====
+  const dvOverlay = document.getElementById('diagram-viewer');
+  const dvStage   = document.getElementById('dv-stage');
+  const dvCanvas  = document.getElementById('dv-canvas');
+  const dvTitle   = document.getElementById('dv-title');
+  let dvNoteId = null;
+  let dvScale = 1, dvX = 0, dvY = 0, dvNat = { w: 1, h: 1 };
+
+  function dvApply() {
+    dvCanvas.style.transform = 'translate(' + dvX + 'px,' + dvY + 'px) scale(' + dvScale + ')';
+  }
+  function dvFit() {
+    const r = dvStage.getBoundingClientRect();
+    const fit = Math.min(r.width / dvNat.w, r.height / dvNat.h) * 0.92;
+    dvScale = fit > 0 ? fit : 1;
+    dvX = (r.width  - dvNat.w * dvScale) / 2;
+    dvY = (r.height - dvNat.h * dvScale) / 2;
+    dvApply();
+  }
+  function dv100() {
+    const r = dvStage.getBoundingClientRect();
+    dvScale = 1;
+    dvX = (r.width  - dvNat.w) / 2;
+    dvY = (r.height - dvNat.h) / 2;
+    dvApply();
+  }
+  async function dvRenderSrc(src) {
+    dvCanvas.classList.remove('diagram-error');
+    try {
+      const mermaid = await getMermaid();
+      const { svg } = await mermaid.render('dv-' + (++mermaidSeq), src);
+      dvCanvas.innerHTML = svg;
+      const s = dvCanvas.querySelector('svg');
+      dvNat = svgNaturalSize(s);
+      s.style.maxWidth = 'none';
+      s.style.width  = dvNat.w + 'px';
+      s.style.height = dvNat.h + 'px';
+      dvFit();
+    } catch (err) {
+      dvCanvas.classList.add('diagram-error');
+      dvCanvas.textContent = 'Ошибка отрисовки: ' + (err && err.message ? err.message : err);
+    }
+  }
+  function openDiagramViewer(noteId) {
+    const rec = notes.get(noteId);
+    if (!rec || !rec.el.dataset.mermaidSrc) return;
+    dvNoteId = noteId;
+    dvTitle.textContent = rec.el.querySelector('.title')?.textContent?.trim() || 'Диаграмма';
+    dvOverlay.classList.add('show');
+    dvRenderSrc(rec.el.dataset.mermaidSrc);
+  }
+  function closeDiagramViewer() {
+    dvOverlay.classList.remove('show');
+    dvNoteId = null;
+  }
+
+  document.getElementById('dv-fit').addEventListener('click', dvFit);
+  document.getElementById('dv-100').addEventListener('click', dv100);
+  document.getElementById('dv-close').addEventListener('click', closeDiagramViewer);
+
+  document.getElementById('dv-copy').addEventListener('click', async (e) => {
+    const rec = notes.get(dvNoteId);
+    if (!rec) return;
+    try {
+      await navigator.clipboard.writeText(rec.el.dataset.mermaidSrc || '');
+      const btn = e.currentTarget;
+      btn.classList.add('done');
+      setTimeout(() => btn.classList.remove('done'), 1200);
+    } catch (_) { alert('Не удалось скопировать (браузер запретил доступ к буферу).'); }
+  });
+
+  const dvRegenBtn = document.getElementById('dv-regen');
+  dvRegenBtn.addEventListener('click', async () => {
+    const rec = notes.get(dvNoteId);
+    if (!rec) return;
+    const idea = rec.el.querySelector('.pane.idea')?.innerText.trim();
+    if (!idea) { alert('В карточке нет текста идеи.'); return; }
+    dvRegenBtn.classList.add('spinning');
+    try {
+      const src = await generateMermaid(idea);
+      rec.el.dataset.mermaidSrc = src;
+      await dvRenderSrc(src);
+      const pane = rec.el.querySelector('.pane.algorithm');
+      if (pane) await renderMermaidInto(pane, src);  // обновляем и превью карточки
+      saveAll();
+    } catch (err) {
+      alert('Не удалось перегенерировать: ' + (err && err.message ? err.message : err));
+    } finally {
+      dvRegenBtn.classList.remove('spinning');
+    }
+  });
+
+  // Зум колесом — к точке под курсором
+  dvStage.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const r = dvStage.getBoundingClientRect();
+    const mx = e.clientX - r.left, my = e.clientY - r.top;
+    const factor = Math.exp(-e.deltaY * 0.0015);
+    const ns = Math.min(8, Math.max(0.08, dvScale * factor));
+    dvX = mx - (mx - dvX) * (ns / dvScale);
+    dvY = my - (my - dvY) * (ns / dvScale);
+    dvScale = ns;
+    dvApply();
+  }, { passive: false });
+
+  // Панорама перетаскиванием
+  dvStage.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const sx = e.clientX, sy = e.clientY, ox = dvX, oy = dvY;
+    dvStage.classList.add('grabbing');
+    const mv = (ev) => { dvX = ox + (ev.clientX - sx); dvY = oy + (ev.clientY - sy); dvApply(); };
+    const up = () => {
+      window.removeEventListener('mousemove', mv);
+      window.removeEventListener('mouseup', up);
+      dvStage.classList.remove('grabbing');
+    };
+    window.addEventListener('mousemove', mv);
+    window.addEventListener('mouseup', up);
+  });
+  dvStage.addEventListener('dblclick', dvFit);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && dvOverlay.classList.contains('show')) closeDiagramViewer();
+  });
 
   // Короткий заголовок карточки по тексту идеи (для авто-подписи).
   async function generateTitle(idea) {
