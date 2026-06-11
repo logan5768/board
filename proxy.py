@@ -293,6 +293,12 @@ def make_handler(upstream_url):
         def log_message(self, fmt, *args):
             sys.stderr.write("[board] " + (fmt % args) + "\n")
 
+        def end_headers(self):
+            # Никогда не кэшируем: после правки index.html браузер сразу
+            # видит свежую версию, без Ctrl+F5 и «ничего не обновилось».
+            self.send_header("Cache-Control", "no-store, must-revalidate")
+            super().end_headers()
+
         def _send_cors(self):
             for k, v in CORS_HEADERS.items():
                 self.send_header(k, v)
