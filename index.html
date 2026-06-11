@@ -100,8 +100,8 @@
 
   .note {
     position: absolute;
-    min-width: 80px;
-    min-height: 48px;
+    min-width: 150px;
+    min-height: 100px;
     background: var(--note-bg);
     border: 1.5px solid var(--note-border);
     border-radius: 10px;
@@ -138,7 +138,7 @@
   .note .title {
     /* Узкий хитбокс: занимает только своё содержимое, оставляя бар свободным для drag */
     flex: 0 1 auto;
-    min-width: 70px;
+    min-width: 0;
     max-width: 50%;
     font-size: 12px;
     font-weight: 600;
@@ -739,7 +739,7 @@
     .note .link { width: 24px; height: 24px; font-size: 14px; }
     .note .seg-btn { padding: 6px 12px; font-size: 13px; }
     .note .icon-btn { width: 30px; height: 28px; }
-    .note { min-width: 120px; min-height: 80px; }
+    .note { min-width: 170px; min-height: 116px; }
     .handle.e, .handle.w { width: 24px; }
     .handle.n, .handle.s { height: 24px; }
     .handle.ne, .handle.nw, .handle.se, .handle.sw { width: 28px; height: 28px; }
@@ -993,7 +993,9 @@
   }
 
   const STORAGE_KEY = 'aiboard.notes.v2';
-  const MIN_W = 80, MIN_H = 48;
+  // Минимум подобран так, чтобы шапка и нижняя полоска кнопок всегда
+  // помещались в карточку и не вылезали за неё.
+  const MIN_W = 150, MIN_H = 100;
 
   // data
   const notes = new Map();        // id -> { el }
